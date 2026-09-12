@@ -1,5 +1,3 @@
-※ 이 폴더는 DEV 원본에 Render 배민 직접수집기를 통합한 테스트본입니다. 상세 내용은 README_DIRECT_MIGRATION.txt 참고.
-
 RIDER CONTROL v3 — 다지사 + 권한 기반
 
 이번 버전의 핵심

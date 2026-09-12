@@ -4,20 +4,3 @@ services:
     runtime: node
     buildCommand: npm install
     startCommand: npm start
-    envVars:
-      # 배민 직접 연결 - 현재 테스트 서비스에 이미 설정한 값 사용
-      - key: BAEMIN_CENTER_ID
-        sync: false
-      - key: BAEMIN_COOKIE
-        sync: false
-      - key: BAEMIN_POLL_MS
-        value: "20000"
-
-      # rider-control 기존 기능을 원본 DB와 똑같이 쓰려면
-      # 기존 rider-control-test Render의 값을 그대로 복사
-      - key: DATABASE_URL
-        sync: false
-      - key: INGEST_KEY
-        sync: false
-      - key: LOGIN_SECRET
-        sync: false

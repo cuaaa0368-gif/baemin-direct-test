@@ -479,12 +479,40 @@ async function fetchDateMap(apiDate) {
   let page = 0;
   let totalPage = 1;
   const all = [];
+  let complete = true;
 
   while (page < totalPage) {
-    const { body } = await requireJson(
-      `/v4/management/rider-delivery-status?page=${page}&size=100&fromDate=${encodeURIComponent(apiDate)}&toDate=${encodeURIComponent(apiDate)}`,
-      `rider-delivery-status ${apiDate} page=${page}`
+    const result = await callBaemin(
+      `/v4/management/rider-delivery-status?page=${page}&size=100&fromDate=${encodeURIComponent(apiDate)}&toDate=${encodeURIComponent(apiDate)}`
     );
+
+    // 인증 만료는 숨기면 안 된다. 전체 수집기를 인증 필요 상태로 올린다.
+    if (result.status === 401 || result.status === 403) {
+      throw httpError(
+        `rider-delivery-status ${apiDate} page=${page}`,
+        result
+      );
+    }
+
+    // 기존 Tampermonkey fetchDateMap과 동일한 동작:
+    // 특정 날짜 조회가 400 등으로 아직 제공되지 않으면 그 날짜만 빈 map으로 처리하고
+    // 주간/거절/90일 전체 동기화는 계속 진행한다.
+    if (!result.ok) {
+      complete = false;
+      console.warn(
+        `[BAEMIN DATE] SKIP ${apiDate} page=${page} HTTP ${result.status}`
+      );
+      break;
+    }
+
+    const body = result.body;
+    if (!body || typeof body !== "object") {
+      complete = false;
+      console.warn(
+        `[BAEMIN DATE] SKIP ${apiDate} page=${page} JSON 없음`
+      );
+      break;
+    }
 
     if (Array.isArray(body.data)) all.push(...body.data);
 
@@ -499,10 +527,15 @@ async function fetchDateMap(apiDate) {
     if (userId) map.set(userId, row);
   }
 
-  historyCache.set(apiDate, {
-    map,
-    expiresAt: Date.now() + HISTORY_CACHE_MS
-  });
+  // 정상 완료한 과거 날짜만 장기 캐시한다.
+  // 400으로 아직 제공되지 않은 날짜는 다음 주기에서 다시 확인할 수 있게 캐시하지 않는다.
+  if (complete) {
+    historyCache.set(apiDate, {
+      map,
+      expiresAt: Date.now() + HISTORY_CACHE_MS
+    });
+  }
+
   return map;
 }
 
@@ -994,6 +1027,9 @@ async function syncWeeklyReject() {
     );
     console.log(
       `[BAEMIN REJECT] OK riders=${rejectPayload.riders.length} rows=${rejectPayload.dailyRejectData.length}`
+    );
+    console.log(
+      `[LOGIN READY] rider default login source ready: ${rejectPayload.riders.length} riders`
     );
   } catch (error) {
     const info = summarizeError(error);

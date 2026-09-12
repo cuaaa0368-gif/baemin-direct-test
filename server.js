@@ -2664,6 +2664,12 @@ app.get(
       accounts:
         accounts.size,
 
+      rejectCenters:
+        rejectCenters.size,
+
+      historyCenters:
+        historyCenters.size,
+
       baeminDirect:
         getBaeminDirectStatus()
 
