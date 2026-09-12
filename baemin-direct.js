@@ -93,18 +93,16 @@ let lastLiveSnapshot = null;
 let lastLiveSnapshotAt = 0;
 
 const KOREAN_HOLIDAYS = new Set([
-  "01-01",
-  "02-18",
-  "03-01",
-  "05-05",
-  "05-25",
-  "06-03",
-  "06-06",
-  "08-15",
-  "08-17",
-  "10-03",
-  "10-09",
-  "12-25"
+  // 2026년 공식 월력요항 + 기존 운영상 선거일. 공휴일은 일요일 목표를 적용한다.
+  "2026-01-01",
+  "2026-02-16", "2026-02-17", "2026-02-18",
+  "2026-03-01", "2026-03-02",
+  "2026-05-05", "2026-05-24", "2026-05-25",
+  "2026-06-03", "2026-06-06",
+  "2026-08-15", "2026-08-17",
+  "2026-09-24", "2026-09-25", "2026-09-26",
+  "2026-10-03", "2026-10-05", "2026-10-09",
+  "2026-12-25"
 ]);
 
 const NAME_MAP = {
@@ -329,7 +327,7 @@ function getGoal(type) {
   let day = date.getUTCDay();
 
   if (businessKey === "2026-07-17") day = 6;
-  if (KOREAN_HOLIDAYS.has(businessKey.slice(5))) day = 0;
+  if (KOREAN_HOLIDAYS.has(businessKey)) day = 0;
 
   const goals = {
     morning: { monThu: 19, fri: 21, sat: 27, sun: 29 },
@@ -527,6 +525,10 @@ async function fetchDateMap(apiDate) {
     if (userId) map.set(userId, row);
   }
 
+  // 날짜 조회 가능 여부를 다음 점검시간에 추측 없이 확인하기 위한 최소 진단 로그.
+  // 개인정보/인증정보는 기록하지 않는다.
+  console.log(`[BAEMIN DATE] ${complete ? "OK" : "INCOMPLETE"} apiDate=${apiDate} riders=${map.size}`);
+
   // 정상 완료한 과거 날짜만 장기 캐시한다.
   // 400으로 아직 제공되지 않은 날짜는 다음 주기에서 다시 확인할 수 있게 캐시하지 않는다.
   if (complete) {
@@ -584,16 +586,23 @@ function buildLivePayload(snapshot) {
   const riders = list.map(d => {
     const a = d.deliveryAcceptanceCount || {};
     const p = d.deliveryPeakTimeCount || {};
+    const foodComplete = safe(a.foodComplete);
+    const bmartComplete = safe(a.bmartComplete);
+    const storeComplete = safe(a.storeComplete);
+    const slaOutComplete = safe(a.slaOutComplete);
+    const nurionTotal = foodComplete + bmartComplete + storeComplete + slaOutComplete;
     return {
       name: mapName(d.name),
       phoneNumber: d.phoneNumber || "",
       userId: d.userId || "",
       status: d.status?.code || "",
-      allDayComplete: safe(a.allDayComplete),
-      foodComplete: safe(a.foodComplete),
-      bmartComplete: safe(a.bmartComplete),
-      storeComplete: safe(a.storeComplete),
-      slaOutComplete: safe(a.slaOutComplete),
+      // 누리온의 모든 '총 완료'는 4개 유형 합산을 단일 기준으로 사용한다.
+      allDayComplete: nurionTotal,
+      sourceAllDayComplete: safe(a.allDayComplete),
+      foodComplete,
+      bmartComplete,
+      storeComplete,
+      slaOutComplete,
       foodReject: safe(a.foodReject),
       deliveryPeakTimeCount: { ...p },
       hourlyCompleted: Array.isArray(d.hourlyCompleted) ? d.hourlyCompleted : [],
@@ -738,14 +747,16 @@ function buildWeeklyPayload(week) {
   const todayRanking = [];
 
   todayMap.forEach(r => {
+    const a = r.deliveryAcceptanceCount || {};
+    const food = safe(a.foodComplete);
+    const bmart = safe(a.bmartComplete);
+    const store = safe(a.storeComplete);
+    const out = safe(a.slaOutComplete);
     todayRanking.push({
       userId: String(r.userId || ""),
       name: String(r.name || ""),
-      val: safe(r.deliveryAcceptanceCount?.allDayComplete),
-      food: safe(r.deliveryAcceptanceCount?.foodComplete),
-      bmart: safe(r.deliveryAcceptanceCount?.bmartComplete),
-      store: safe(r.deliveryAcceptanceCount?.storeComplete),
-      out: safe(r.deliveryAcceptanceCount?.slaOutComplete)
+      val: food + bmart + store + out,
+      food, bmart, store, out
     });
   });
 
@@ -868,7 +879,7 @@ function historyRow(businessDate, r) {
     name: String(r.name || "").trim(),
     deliveryAcceptanceCount: { ...a },
     deliveryPeakTimeCount: { ...p },
-    totalComplete: safe(a.totalComplete),
+    totalComplete: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safe(a.slaOutComplete),
     totalReject: safe(a.totalReject),
     totalCancel: safe(a.totalCancel),
     totalRiderFault: safe(a.totalRiderFault),
@@ -876,8 +887,8 @@ function historyRow(businessDate, r) {
     bmart: safe(a.bmartComplete),
     store: safe(a.storeComplete),
     out: safe(a.slaOutComplete),
-    allDay: safe(a.allDayComplete),
-    total: safe(a.totalComplete),
+    allDay: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safe(a.slaOutComplete),
+    total: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safe(a.slaOutComplete),
     morning: safe(p.morning),
     afternoon: safe(p.afternoon),
     evening: safe(p.evening),

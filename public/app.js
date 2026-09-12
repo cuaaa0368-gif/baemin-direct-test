@@ -7,6 +7,7 @@ let centerReject = null;
 let myWeekly = null;
 let myHistory = null;
 let myToday = null;
+let myTodayBusinessKey = "";
 
 let rankingMode = "champions";
 
@@ -561,7 +562,7 @@ function renderCenterReject() {
    현황
 ========================================================= */
 
-function renderPeaks(d) {
+function renderStatusPeaks(d) {
 
   const box =
     $("peaks");
@@ -2141,7 +2142,7 @@ function renderMain(d) {
   );
 
 
-  renderPeaks(d);
+  renderStatusPeaks(d);
 
 
   renderRanking(d);
@@ -2541,7 +2542,34 @@ try {
       "/api/my-today"
     );
 
-  myToday = result.data || null;
+  const incomingToday = result.data || null;
+  const incomingBusinessKey = dateKey(getBusinessDate());
+  if (incomingToday && myToday && myTodayBusinessKey === incomingBusinessKey) {
+    const merged = { ...myToday, ...incomingToday };
+    for (const key of ["total", "food", "bmart", "store", "out"]) {
+      const prev = Number(myToday[key]);
+      const next = Number(incomingToday[key]);
+      if (Number.isFinite(prev) && prev >= 0 && (!Number.isFinite(next) || next < prev)) merged[key] = prev;
+    }
+    const prevPeak = myToday.deliveryPeakTimeCount || {};
+    const nextPeak = incomingToday.deliveryPeakTimeCount || {};
+    if (Object.keys(prevPeak).length || Object.keys(nextPeak).length) {
+      merged.deliveryPeakTimeCount = { ...prevPeak, ...nextPeak };
+      for (const key of ["morning", "afternoon", "evening", "midnight"]) {
+        const prev = Number(prevPeak[key]);
+        const next = Number(nextPeak[key]);
+        if (Number.isFinite(prev) && prev >= 0 && (!Number.isFinite(next) || next < prev)) merged.deliveryPeakTimeCount[key] = prev;
+      }
+    }
+    if ((!Array.isArray(incomingToday.hourlyCompleted) || !incomingToday.hourlyCompleted.length) && Array.isArray(myToday.hourlyCompleted)) {
+      merged.hourlyCompleted = myToday.hourlyCompleted;
+    }
+    myToday = merged;
+  } else {
+    // 06:00에 영업일이 바뀌면 전날 누적값을 새 날짜에 끌고 오지 않는다.
+    myToday = incomingToday;
+    myTodayBusinessKey = incomingBusinessKey;
+  }
   detailLoadState.today = "success";
 
 if ($("myComplete")) {

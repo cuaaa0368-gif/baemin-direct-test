@@ -40,6 +40,129 @@ const rejectCenters = new Map();
 const historyCenters = new Map();
 
 /* =========================================================
+   실시간 누적값 안정화
+   - 같은 영업일의 누적 완료/피크/시간대 값은 감소하지 않는다.
+   - 06:00 영업일 전환 시에는 새 날짜로 정상 초기화한다.
+========================================================= */
+function businessDateKeyKst(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23"
+  }).formatToParts(now).reduce((o, p) => (o[p.type] = p.value, o), {});
+  const d = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00Z`);
+  if (Number(parts.hour) < 6) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function nonNegativeNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function monotonicNumber(previous, incoming) {
+  const a = nonNegativeNumber(previous);
+  const b = nonNegativeNumber(incoming);
+  if (a == null) return b == null ? 0 : b;
+  if (b == null) return a;
+  return Math.max(a, b);
+}
+
+function mergePeak(previous = {}, incoming = {}) {
+  const out = { ...previous, ...incoming };
+  for (const key of ["morning", "afternoon", "evening", "midnight"]) {
+    if (previous?.[key] != null || incoming?.[key] != null) {
+      out[key] = monotonicNumber(previous?.[key], incoming?.[key]);
+    } else {
+      delete out[key];
+    }
+  }
+  return out;
+}
+
+function mergeHourly(previous, incoming) {
+  if (!Array.isArray(incoming) || !incoming.length) return Array.isArray(previous) ? previous : [];
+  if (!Array.isArray(previous) || !previous.length) return incoming;
+  const len = Math.max(previous.length, incoming.length);
+  const out = [];
+  for (let i = 0; i < len; i++) {
+    const a = previous[i], b = incoming[i];
+    if (typeof a === "number" || typeof b === "number") {
+      out[i] = monotonicNumber(a, b);
+      continue;
+    }
+    if (a && typeof a === "object" || b && typeof b === "object") {
+      const merged = { ...(a || {}), ...(b || {}) };
+      for (const key of ["count", "complete", "completed", "value", "total"]) {
+        if ((a && a[key] != null) || (b && b[key] != null)) merged[key] = monotonicNumber(a?.[key], b?.[key]);
+      }
+      out[i] = merged;
+      continue;
+    }
+    out[i] = b ?? a;
+  }
+  return out;
+}
+
+function mergeLiveRiders(previousRows, incomingRows, sameBusinessDay) {
+  if (!sameBusinessDay) return Array.isArray(incomingRows) ? incomingRows : [];
+  const byId = new Map();
+  for (const row of Array.isArray(previousRows) ? previousRows : []) {
+    const id = String(row?.userId || "").trim();
+    if (id) byId.set(id, { ...row });
+  }
+  for (const row of Array.isArray(incomingRows) ? incomingRows : []) {
+    const id = String(row?.userId || "").trim();
+    if (!id) continue;
+    const prev = byId.get(id) || {};
+    const merged = { ...prev, ...row };
+    for (const key of ["allDayComplete", "foodComplete", "bmartComplete", "storeComplete", "slaOutComplete", "foodReject", "morning", "afternoon", "evening", "night"]) {
+      merged[key] = monotonicNumber(prev[key], row[key]);
+    }
+    merged.deliveryPeakTimeCount = mergePeak(prev.deliveryPeakTimeCount, row.deliveryPeakTimeCount);
+    merged.hourlyCompleted = mergeHourly(prev.hourlyCompleted, row.hourlyCompleted);
+    byId.set(id, merged);
+  }
+  return [...byId.values()];
+}
+
+function fourTypeTotal(r) {
+  return ["foodComplete", "bmartComplete", "storeComplete", "slaOutComplete"]
+    .reduce((sum, key) => sum + (nonNegativeNumber(r?.[key]) || 0), 0);
+}
+
+function mergeHistoryRows(previousRows, incomingRows, fromDate, toDate) {
+  const byKey = new Map();
+  for (const row of Array.isArray(previousRows) ? previousRows : []) {
+    const date = String(row?.date || "");
+    const id = String(row?.userId || "").trim();
+    // 새 90일 창 밖의 오래된 메모리는 유지하지 않는다.
+    if (!date || !id || (fromDate && date < fromDate) || (toDate && date > toDate)) continue;
+    byKey.set(`${date}|${id}`, { ...row });
+  }
+  for (const row of Array.isArray(incomingRows) ? incomingRows : []) {
+    const date = String(row?.date || "");
+    const id = String(row?.userId || "").trim();
+    if (!date || !id) continue;
+    const key = `${date}|${id}`;
+    const prev = byKey.get(key) || {};
+    const merged = { ...prev, ...row };
+    const pa = prev.deliveryAcceptanceCount || {};
+    const ia = row.deliveryAcceptanceCount || {};
+    const acceptance = { ...pa, ...ia };
+    for (const k of ["foodComplete", "bmartComplete", "storeComplete", "slaOutComplete", "allDayComplete", "totalComplete", "foodReject", "totalReject", "totalCancel", "totalRiderFault"]) {
+      if (pa[k] != null || ia[k] != null) acceptance[k] = monotonicNumber(pa[k], ia[k]);
+    }
+    merged.deliveryAcceptanceCount = acceptance;
+    merged.deliveryPeakTimeCount = mergePeak(prev.deliveryPeakTimeCount, row.deliveryPeakTimeCount);
+    merged.hourlyCompleted = mergeHourly(prev.hourlyCompleted, row.hourlyCompleted);
+    for (const k of ["food", "bmart", "store", "out", "allDay", "total", "totalComplete", "morning", "afternoon", "evening", "midnight", "reject", "cancel", "riderFault"]) {
+      if (prev[k] != null || row[k] != null) merged[k] = monotonicNumber(prev[k], row[k]);
+    }
+    byKey.set(key, merged);
+  }
+  return [...byKey.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.userId).localeCompare(String(b.userId)));
+}
+
+/* =========================================================
    Supabase - 라이더 날짜별 실적 저장
 ========================================================= */
 
@@ -423,6 +546,7 @@ async function getSeochoChampions(centerKey) {
     AND complete > 0
 )
 ORDER BY stat_date ASC, rider_user_id ASC
+    LIMIT 1
     `,
     [centerKey]
   );
@@ -447,6 +571,7 @@ ORDER BY stat_date ASC, rider_user_id ASC
         AND evening_complete > 0
     )
   ORDER BY stat_date ASC, rider_user_id ASC
+  LIMIT 1
   `,
   [centerKey]
 );
@@ -473,6 +598,7 @@ const weeklyResult = await pool.query(
         AND complete > 0
     )
   ORDER BY week_start ASC, rider_user_id ASC
+  LIMIT 1
   `,
   [centerKey]
 );
@@ -866,36 +992,55 @@ app.post(
     }
 
 
-    const previous =
-      centers.get(centerKey) || {};
+    const previous = centers.get(centerKey) || {};
+    const businessDate = businessDateKeyKst();
+    const sameBusinessDay = previous.liveBusinessDate === businessDate;
+    const riders = mergeLiveRiders(previous.riders, req.body.riders, sameBusinessDay);
 
+    // 현재/피크 누적값은 같은 영업일 안에서 감소하지 않게 라이더별 정상값으로 재계산한다.
+    const peaks = riders.reduce((sum, r) => {
+      const p = r.deliveryPeakTimeCount || {};
+      sum.morning += nonNegativeNumber(p.morning) || 0;
+      sum.afternoon += nonNegativeNumber(p.afternoon) || 0;
+      sum.evening += nonNegativeNumber(p.evening) || 0;
+      sum.night += nonNegativeNumber(p.midnight) || 0;
+      return sum;
+    }, { morning: 0, afternoon: 0, evening: 0, night: 0 });
 
-    centers.set(
+    const ranking = riders
+      .map(r => ({ name: r.name, val: fourTypeTotal(r) }))
+      .filter(r => r.val > 0)
+      .sort((a, b) => b.val - a.val);
+    const eveningRanking = riders
+      .map(r => ({ name: r.name, val: nonNegativeNumber(r?.deliveryPeakTimeCount?.evening) || 0 }))
+      .filter(r => r.val > 0)
+      .sort((a, b) => b.val - a.val)
+      .slice(0, 10);
+
+    const incomingSummary = req.body.summary || {};
+    const previousSummary = sameBusinessDay ? (previous.summary || {}) : {};
+    const summary = {
+      ...previousSummary,
+      ...incomingSummary,
+      completed: monotonicNumber(previousSummary.completed, incomingSummary.completed)
+    };
+
+    centers.set(centerKey, {
+      ...previous,
+      ...req.body,
       centerKey,
-      {
+      centerName: req.body.centerName || previous.centerName || centerKey,
+      liveBusinessDate: businessDate,
+      summary,
+      riders,
+      peaks,
+      ranking,
+      eveningRanking,
+      receivedAt: new Date().toISOString()
+    });
 
-        ...previous,
-
-        ...req.body,
-
-        centerKey,
-
-        centerName:
-          req.body.centerName ||
-          previous.centerName ||
-          centerKey,
-
-        receivedAt:
-          new Date().toISOString()
-
-      }
-    );
-
-    // 저녁피크 실적 DB 저장
-saveEveningToDB(
-  centerKey,
-  req.body.riders
-);
+    // 기록보관소용 DB에는 안정화된 누적값만 저장한다.
+    saveEveningToDB(centerKey, riders);
 
 
     res.json({
@@ -932,10 +1077,14 @@ app.post(
 
     const body = req.body || {};
 
-    const rows =
-      Array.isArray(body.rows)
-        ? body.rows
-        : [];
+    const incomingRows = Array.isArray(body.rows) ? body.rows : [];
+    const previousHistory = historyCenters.get(centerKey) || {};
+    const rows = mergeHistoryRows(
+      previousHistory.rows,
+      incomingRows,
+      String(body.fromDate || ""),
+      String(body.toDate || "")
+    );
 
     historyCenters.set(centerKey, {
       centerKey,
@@ -967,7 +1116,9 @@ app.post(
       "days:",
       Number(body.dayCount) || 0,
       "rows:",
-      rows.length
+      rows.length,
+      "incoming:",
+      incomingRows.length
     );
 
     res.json({
