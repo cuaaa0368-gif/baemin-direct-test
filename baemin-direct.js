@@ -660,7 +660,7 @@ async function collectWeekMaps() {
     if (businessDate === today) {
       map = await fetchTodayMap({ allowRecent: true });
     } else {
-      map = await fetchDateMap(addDaysKey(businessDate, 1));
+      map = await fetchDateMap(businessDate);
     }
 
     days.push({
@@ -914,7 +914,7 @@ async function buildHistoryPayload() {
     if (businessDate === today) {
       map = await fetchTodayMap({ allowRecent: true });
     } else {
-      map = await fetchDateMap(addDaysKey(businessDate, 1));
+      map = await fetchDateMap(businessDate);
     }
 
     map.forEach(r => rows.push(historyRow(businessDate, r)));
