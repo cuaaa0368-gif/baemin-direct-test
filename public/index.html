@@ -670,7 +670,7 @@
         </div>
 
         <section class="detail-summary-card">
-          <div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div>
+          <div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div>
           <div class="detail-total-panel"><span>주간 합계</span><div><strong id="weeklyTotal">0건</strong><small id="weeklyCompare">-</small></div></div>
         </section>
 
@@ -685,10 +685,10 @@
 
         <article class="detail-card"><h3>배달 유형별 합계</h3>
           <div class="detail-type-grid four">
-            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5c0 2 1 3 3 3s3-1 3-3V3M7 11v10M16 3v18M16 3c3 2 4 5 4 8h-4"></path></svg></i><span>음식</span><strong id="weeklyFood">-</strong><small id="weeklyFoodRate">-</small></div>
-            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10h9.9l2-7H6.2M9 19a1.5 1.5 0 1 0 0 .1M17 19a1.5 1.5 0 1 0 0 .1"></path></svg></i><span>B마트</span><strong id="weeklyBmart">-</strong><small id="weeklyBmartRate">-</small></div>
-            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l-1.2-5H5.2L4 9Zm1 0v11h14V9M8 20v-6h5v6M4 9c0 2 3 2.5 4 0 1 2.5 4 2.5 5 0 1 2.5 4 2.5 5 0"></path></svg></i><span>스토어</span><strong id="weeklyStore">-</strong><small id="weeklyStoreRate">-</small></div>
-            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 7v5l3 2"></path></svg></i><span>시간외</span><strong id="weeklyOut">-</strong><small id="weeklyOutRate">-</small></div>
+            <div><span>음식</span><strong id="weeklyFood">-</strong><small id="weeklyFoodRate">-</small></div>
+            <div><span>B마트</span><strong id="weeklyBmart">-</strong><small id="weeklyBmartRate">-</small></div>
+            <div><span>스토어</span><strong id="weeklyStore">-</strong><small id="weeklyStoreRate">-</small></div>
+            <div><span>시간외</span><strong id="weeklyOut">-</strong><small id="weeklyOutRate">-</small></div>
           </div>
         </article>
       </div>
@@ -697,23 +697,23 @@
         <div id="monthlyDataState" class="detail-data-state hidden" role="status"></div>
         <div class="monthly-control-row">
           <div class="detail-date-nav calendar-head"><button id="calendarPrev" type="button" aria-label="이전 달">‹</button><strong id="calendarTitle">-</strong><button id="calendarNext" type="button" aria-label="다음 달">›</button></div>
-          <div id="recentMonths" class="recent-months"></div>
         </div>
         <article class="detail-card calendar-card">
           <div id="monthlyCalendar" class="monthly-calendar"></div>
         </article>
+        <p class="monthly-limit-note">최대 90일까지 조회가 가능합니다</p>
         <div class="monthly-bottom-row">
           <section class="heat-legend"><strong>색상 안내 <small>(일 배달 건수)</small></strong><div>
             <span><i class="heat-1"></i>1~30</span><span><i class="heat-2"></i>31~60</span><span><i class="heat-3"></i>61~90</span><span><i class="heat-4"></i>91 이상</span>
           </div></section>
-          <section class="month-stats"><div><span>선택월 합계</span><strong id="monthTotal">-</strong></div><div><span>일평균</span><strong id="monthAverage">-</strong></div><div><span>최대</span><strong id="monthMax">-</strong></div></section>
+          <section class="month-stats"><div><span>선택월 합계</span><strong id="monthTotal">-</strong></div><div><span>일평균</span><strong id="monthAverage">-</strong></div><div><span>최대</span><strong id="monthMax">-</strong></div><div><span>지난달</span><strong id="monthPrevious">-</strong></div></section>
         </div>
       </div>
 
       <div id="dailyDetailView" class="detail-view hidden">
         <div id="dailyDataState" class="detail-data-state hidden" role="status"></div>
         <div class="detail-date-nav"><button id="dailyPrev" type="button" aria-label="이전 날짜">‹</button><strong id="dailyDateTitle">-</strong><button id="dailyNext" type="button" aria-label="다음 날짜">›</button></div>
-        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div><div class="detail-total-panel simple"><span>일일 합계</span><div><strong id="dailyTotal">0건</strong></div></div></section>
+        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div><div class="detail-total-panel simple"><span>일일 합계</span><div><strong id="dailyTotal">0건</strong></div></div></section>
         <div class="detail-stat-grid daily-types"><div><span>음식</span><strong id="dailyFood">-</strong><small id="dailyFoodRate">-</small></div><div><span>B마트</span><strong id="dailyBmart">-</strong><small id="dailyBmartRate">-</small></div><div><span>스토어</span><strong id="dailyStore">-</strong><small id="dailyStoreRate">-</small></div><div><span>시간외</span><strong id="dailyOut">-</strong><small id="dailyOutRate">-</small></div></div>
         <article class="detail-card chart-card"><h3>시간대별 배달 건수</h3><div id="dailyHourlyChart" class="daily-hourly-chart"></div><p id="dailyHourlyNote" class="detail-data-note hidden"></p></article>
         <article class="detail-card"><h3>피크타임 배달 건수</h3><div class="peak-detail-grid"><div><span>아침점심피크</span><strong id="dailyPeakMorning">-</strong></div><div><span>오후논피크</span><strong id="dailyPeakAfternoon">-</strong></div><div class="active"><span>저녁피크</span><strong id="dailyPeakEvening">-</strong></div><div><span>야간논피크</span><strong id="dailyPeakMidnight">-</strong></div></div><p id="dailyPeakNote" class="detail-data-note hidden"></p></article>
@@ -722,9 +722,15 @@
       <div id="periodDetailView" class="detail-view hidden">
         <div id="periodDataState" class="detail-data-state hidden" role="status"></div>
         <div class="detail-date-nav period-date-nav"><button id="periodPrev" type="button" aria-label="이전 기간">‹</button><strong id="periodRangeTitle">-</strong><button id="periodNext" type="button" aria-label="다음 기간">›</button></div>
-        <div class="period-quick-tabs"><button type="button" data-period-days="7">최근 7일</button><button type="button" data-period-days="30">최근 30일</button><button type="button" class="active" data-period-days="90">최근 90일</button><button type="button" data-period-days="custom">직접선택</button></div>
-        <div id="customPeriodPicker" class="custom-period-picker hidden"><label><span>시작일</span><input id="periodStartDate" type="date"></label><b>~</b><label><span>종료일</span><input id="periodEndDate" type="date"></label><button id="applyCustomPeriod" type="button">조회</button></div>
-        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div><div class="detail-total-panel"><span>기간 합계</span><div><strong id="periodTotal">0건</strong><small id="periodAverage">일평균 -</small></div></div></section>
+        <div class="period-quick-tabs"><button type="button" data-period-days="7">최근 7일</button><button type="button" data-period-days="30">최근 30일</button><button type="button" class="active" data-period-days="90">최근 90일</button><button type="button" class="period-custom-trigger" data-period-days="custom" aria-label="직접선택" title="직접선택"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg></button></div>
+        <div id="customPeriodPicker" class="detail-modal custom-period-modal hidden" role="dialog" aria-modal="true" aria-labelledby="customPeriodTitle">
+          <div class="custom-period-picker">
+            <div class="custom-period-head"><strong id="customPeriodTitle">기간 직접선택</strong><button id="customPeriodClose" type="button" aria-label="닫기">×</button></div>
+            <div class="custom-period-fields"><label><span>시작일</span><input id="periodStartDate" type="date"></label><b>~</b><label><span>종료일</span><input id="periodEndDate" type="date"></label></div>
+            <button id="applyCustomPeriod" type="button">조회</button>
+          </div>
+        </div>
+        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div><div class="detail-total-panel"><span>기간 합계</span><div><strong id="periodTotal">0건</strong><small id="periodAverage">일평균 -</small></div></div></section>
         <div class="detail-stat-grid period-types"><div><span>음식</span><strong id="periodFood">-</strong><small id="periodFoodRate">-</small></div><div><span>B마트</span><strong id="periodBmart">-</strong><small id="periodBmartRate">-</small></div><div><span>스토어</span><strong id="periodStore">-</strong><small id="periodStoreRate">-</small></div><div><span>시간외</span><strong id="periodOut">-</strong><small id="periodOutRate">-</small></div></div>
         <article class="detail-card chart-card"><h3>월별 배달 건수</h3><div id="periodMonthlyChart" class="period-month-chart"></div></article>
       </div>

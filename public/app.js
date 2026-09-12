@@ -1544,8 +1544,28 @@ function historyBounds() {
 }
 
 function setDetailRiderNames() {
+  const name = String(user?.name || "").trim();
   document.querySelectorAll("#detailPage .detail-rider-name").forEach(el => {
-    el.textContent = user?.name ? `${user.name} 기사님` : "기사님";
+    const nameEl = el.querySelector(".rider-name-text");
+    const honorificEl = el.querySelector(".rider-honorific");
+    if (nameEl && honorificEl) {
+      nameEl.textContent = name;
+      honorificEl.textContent = "기사님";
+    } else {
+      el.textContent = name ? `${name} 기사님` : "기사님";
+    }
+  });
+  requestAnimationFrame(updateDetailRiderCardLayout);
+}
+
+function updateDetailRiderCardLayout() {
+  document.querySelectorAll("#detailPage .detail-rider-block").forEach(card => {
+    const label = card.querySelector(".detail-rider-name");
+    if (!label) return;
+    card.classList.remove("long-name");
+    const pageWidth = Math.max(1, document.querySelector("#detailPage")?.clientWidth || window.innerWidth || 360);
+    // 한 줄 자연 폭이 사용 가능 영역의 50%를 넘을 때만 '이름 / 기사님' 2줄로 전환한다.
+    if (card.scrollWidth > pageWidth * 0.5) card.classList.add("long-name");
   });
 }
 
@@ -2585,14 +2605,6 @@ function heatClass(count) {
   return "heat-4";
 }
 
-function renderRecentMonths() {
-  const box=$("recentMonths"); if(!box)return;
-  const anchor=getBusinessDate();
-  const months=[]; for(let i=2;i>=0;i--) months.push(new Date(anchor.getFullYear(),anchor.getMonth()-i,1));
-  box.innerHTML=`<button type="button" class="recent-label" disabled>최근 3개월</button>`+months.map(d=>`<button type="button" data-month="${dateKey(d).slice(0,7)}" class="${d.getFullYear()===calendarDate.getFullYear()&&d.getMonth()===calendarDate.getMonth()?"active":""}">${d.getFullYear()}. ${d.getMonth()+1}월</button>`).join("");
-  box.querySelectorAll("[data-month]").forEach(btn=>btn.addEventListener("click",()=>{const [y,m]=btn.dataset.month.split("-").map(Number);calendarDate=new Date(y,m-1,1);renderMonthlyCalendar();}));
-}
-
 function renderMonthlyCalendar() {
   setDetailRiderNames(); initializeDetailDates();
   const calendar=$("monthlyCalendar"),title=$("calendarTitle"); if(!calendar||!title)return;
@@ -2602,17 +2614,25 @@ function renderMonthlyCalendar() {
   let html="";
   for(let d=new Date(gridStart);d<=gridEnd;d=addDays(d,1)){
     const key=dateKey(d),row=rowMap.get(key),count=row?rowParts(row).total:0,other=d.getMonth()!==month;
-    html+=`<button type="button" class="calendar-day ${row?heatClass(count):"heat-0"} ${other?"other-month":""} ${d.getDay()===0?"sunday":""} ${d.getDay()===6?"saturday":""}" data-date="${key}" ${row?"":"disabled"}><span class="day-number">${d.getDate()}</span><span class="day-count">${row&&count>0?`${count}건`:""}</span></button>`;
+    html+=`<button type="button" class="calendar-day ${row?heatClass(count):"heat-0"} ${other?"other-month":""} ${d.getDay()===0?"sunday":""} ${d.getDay()===6?"saturday":""}" data-date="${key}" ${row?"":"disabled"}><span class="day-number">${d.getDate()}</span><span class="day-count">${row&&count>0?`${count}`:""}</span></button>`;
   }
   calendar.innerHTML=html;
   calendar.querySelectorAll(".calendar-day[data-date]:not(:disabled)").forEach(btn=>btn.addEventListener("click",()=>openCalendarDayModal(btn.dataset.date)));
   const prefix=`${year}-${String(month+1).padStart(2,"0")}`,monthRows=rows.filter(r=>String(r.date).startsWith(prefix)),sums=sumRows(monthRows);
   setText("monthTotal",monthRows.length?`${sums.total.toLocaleString()}건`:"-"); setText("monthAverage",monthRows.length?`${(sums.total/monthRows.length).toFixed(1)}건`:"-");
   if(monthRows.length){const maxRow=monthRows.reduce((a,b)=>rowParts(b).total>rowParts(a).total?b:a);setText("monthMax",`${rowParts(maxRow).total}건`);}else{setText("monthMax","-");}
+
+  const prevFirst = new Date(year, month - 1, 1);
+  const prevLast = new Date(year, month, 0);
+  const bounds = historyBounds();
+  const prevMonthFullyAvailable = !!bounds && bounds.min <= prevFirst && bounds.max >= prevLast;
+  const prevPrefix = `${prevFirst.getFullYear()}-${String(prevFirst.getMonth()+1).padStart(2,"0")}`;
+  const prevRows = rows.filter(r => String(r.date).startsWith(prevPrefix));
+  setText("monthPrevious", prevMonthFullyAvailable && prevRows.length ? `${sumRows(prevRows).total.toLocaleString()}건` : "-");
+
   const [kind,msg]=historyStatusMessage("monthly"); setDetailState("monthlyDataState",kind,msg);
   const minMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth()-2,1),maxMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth(),1);
   $("calendarPrev").disabled=new Date(year,month-1,1)<minMonth; $("calendarNext").disabled=new Date(year,month+1,1)>maxMonth;
-  renderRecentMonths();
 }
 
 function openCalendarDayModal(key) {
@@ -2806,7 +2826,15 @@ $("applyCustomPeriod")?.addEventListener("click",()=>{
   if(start>end){ alert("시작일은 종료일보다 늦을 수 없습니다."); return; }
   if(Math.floor((end-start)/DETAIL_DAY_MS)+1>90){ alert("기간조회는 최대 90일까지 가능합니다."); return; }
   periodStartDate=start; periodEndDate=end; periodVisibleRows=5; renderPeriodDetail();
+  $("customPeriodPicker")?.classList.add("hidden");
 });
+
+$("customPeriodClose")?.addEventListener("click",()=>$("customPeriodPicker")?.classList.add("hidden"));
+$("customPeriodPicker")?.addEventListener("click",e=>{
+  if(e.target === $("customPeriodPicker")) $("customPeriodPicker")?.classList.add("hidden");
+});
+
+window.addEventListener("resize", () => requestAnimationFrame(updateDetailRiderCardLayout));
 
 $("periodPrev")?.addEventListener("click",()=>{
   const bounds=historyBounds(); if(!bounds)return;
