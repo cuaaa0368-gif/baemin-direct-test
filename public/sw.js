@@ -1,1 +1,0 @@
-const C="rc-v3";self.addEventListener("fetch",()=>{});

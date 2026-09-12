@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: baemin-direct-test
-    runtime: node
-    buildCommand: npm install
-    startCommand: npm start
