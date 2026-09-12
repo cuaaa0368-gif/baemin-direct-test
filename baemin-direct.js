@@ -581,19 +581,28 @@ function buildLivePayload(snapshot) {
   const riderFault = safe(total?.totalFoodRiderFault);
   const denominator = completed + rejected + canceled + riderFault;
 
-  const riders = list.map(d => ({
-    name: mapName(d.name),
-    phoneNumber: d.phoneNumber || "",
-    userId: d.userId || "",
-    status: d.status?.code || "",
-    allDayComplete: safe(d.deliveryAcceptanceCount?.allDayComplete),
-    foodComplete: safe(d.deliveryAcceptanceCount?.foodComplete),
-    foodReject: safe(d.deliveryAcceptanceCount?.foodReject),
-    morning: safe(d.deliveryPeakTimeCount?.morning),
-    afternoon: safe(d.deliveryPeakTimeCount?.afternoon),
-    evening: safe(d.deliveryPeakTimeCount?.evening),
-    night: safe(d.deliveryPeakTimeCount?.midnight)
-  }));
+  const riders = list.map(d => {
+    const a = d.deliveryAcceptanceCount || {};
+    const p = d.deliveryPeakTimeCount || {};
+    return {
+      name: mapName(d.name),
+      phoneNumber: d.phoneNumber || "",
+      userId: d.userId || "",
+      status: d.status?.code || "",
+      allDayComplete: safe(a.allDayComplete),
+      foodComplete: safe(a.foodComplete),
+      bmartComplete: safe(a.bmartComplete),
+      storeComplete: safe(a.storeComplete),
+      slaOutComplete: safe(a.slaOutComplete),
+      foodReject: safe(a.foodReject),
+      deliveryPeakTimeCount: { ...p },
+      hourlyCompleted: Array.isArray(d.hourlyCompleted) ? d.hourlyCompleted : [],
+      morning: safe(p.morning),
+      afternoon: safe(p.afternoon),
+      evening: safe(p.evening),
+      night: safe(p.midnight)
+    };
+  });
 
   const ranking = riders
     .filter(r => r.allDayComplete > 0)
@@ -707,9 +716,14 @@ function buildWeeklyPayload(week) {
         weeklyRankingMap.set(userId, { userId, name, val: 0 });
       }
 
-      weeklyRankingMap.get(userId).val += safe(
-        r.deliveryAcceptanceCount?.allDayComplete
-      );
+      // 주간 상세와 TOP5가 서로 다른 기준을 쓰면 몇 건씩 오차가 생긴다.
+      // 누리온의 "전체 완료" 기준(음식+B마트+스토어+시간외)으로 하나로 통일한다.
+      const a = r.deliveryAcceptanceCount || {};
+      weeklyRankingMap.get(userId).val +=
+        safe(a.foodComplete) +
+        safe(a.bmartComplete) +
+        safe(a.storeComplete) +
+        safe(a.slaOutComplete);
     });
   }
 
@@ -972,7 +986,9 @@ async function syncLive() {
     };
 
     console.log(
-      `[BAEMIN LIVE] OK riders=${snapshot.list.length} running=${payload.summary.runCount}`
+      `[BAEMIN LIVE] OK riders=${snapshot.list.length} running=${payload.summary.runCount} ` +
+      `peaks=${payload.peaks.morning}/${payload.peaks.afternoon}/${payload.peaks.evening}/${payload.peaks.night} ` +
+      `goals=${payload.goals.morning}/${payload.goals.afternoon}/${payload.goals.evening}/${payload.goals.night}`
     );
   } catch (error) {
     state.lastLive = summarizeError(error);

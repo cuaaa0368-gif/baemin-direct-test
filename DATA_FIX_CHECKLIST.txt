@@ -1,0 +1,25 @@
+누리온 Render 직접수집 데이터 수정 체크리스트 (2026-09-13)
+
+[주간 TOP5]
+- 수요일 시작 / 06시 영업일 기준 유지
+- 과거일은 기존 관제 history API 날짜 규칙 유지
+- 오늘은 LIVE delivery-status 사용
+- TOP5와 주간 상세의 완료 기준을 음식+B마트+스토어+시간외로 통일
+- userId 기준 누적 유지
+
+[관제 현황]
+- LIVE delivery-status의 deliveryPeakTimeCount를 전체 라이더 합산
+- 기존 getGoal() 요일/공휴일/06시 영업일 로직 유지
+- LIVE 로그에 peaks/goals 값을 함께 출력해 Render에서 전달 전 값을 검증 가능하게 함
+
+[일별 오늘 실시간]
+- /api/my-today가 10초 LIVE riders를 우선 사용
+- food/B마트/스토어/시간외 + deliveryPeakTimeCount + hourlyCompleted 전달
+- app.js가 오늘 LIVE 피크/시간대 값을 실제로 사용하도록 수정
+- 순간 누락 응답은 기존 정상 피크/시간대 값을 지우지 않음
+- /api/my-today 일시 실패도 직전 정상 myToday를 지우지 않음
+
+[보존]
+- 기존 UI/CSS/반응형 디자인 변경 없음
+- 로그인/API 경로 유지
+- 기존 90일 history 구조 유지

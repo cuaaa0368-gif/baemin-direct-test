@@ -1343,73 +1343,68 @@ app.get(
   auth,
   (req, res) => {
 
-    const center =
-      centers.get(
-        req.account.centerKey
-      );
+    const center = centers.get(req.account.centerKey);
 
     if (!center) {
-      return res.status(404).json({
-        ok: false,
-        message: "연결 대기중."
-      });
+      return res.status(404).json({ ok: false, message: "연결 대기중." });
     }
 
-    const riderUserId =
-      String(
-        req.account.riderUserId || ""
-      ).trim();
+    const riderUserId = String(req.account.riderUserId || "").trim();
+    const riderName = String(req.account.name || "").trim();
 
-    const riderName =
-      String(
-        req.account.name || ""
-      ).trim();
+    // 오늘 상세 화면은 30초 주간 스냅샷보다 10초 LIVE riders를 우선한다.
+    // LIVE에는 피크타임/시간대 원본도 함께 전달되므로 일별 화면이 실제로 갱신될 수 있다.
+    const liveList = Array.isArray(center.riders) ? center.riders : [];
+    const weeklyList = Array.isArray(center.todayDetails) ? center.todayDetails : [];
 
-const list =
-  Array.isArray(center.todayDetails)
-    ? center.todayDetails
-    : [];
+    const findRider = list => {
+      let rider = null;
+      if (riderUserId) {
+        rider = list.find(r => String(r.userId || "").trim() === riderUserId);
+      }
+      if (!rider && riderName) {
+        rider = list.find(r => String(r.name || "").trim() === riderName);
+      }
+      return rider || null;
+    };
 
-    let rider = null;
-
-    // userId 우선
-    if (riderUserId) {
-      rider = list.find(
-        r =>
-          String(r.userId || "").trim() ===
-          riderUserId
-      );
-    }
-
-    // 이름으로 보조 검색
-    if (!rider && riderName) {
-      rider = list.find(
-        r =>
-          String(r.name || "").trim() ===
-          riderName
-      );
-    }
+    const live = findRider(liveList);
+    const weekly = findRider(weeklyList);
+    const rider = live || weekly;
 
     if (!rider) {
-      return res.status(404).json({
-        ok: false,
-        message: "운행기록이 없습니다."
-      });
+      return res.status(404).json({ ok: false, message: "운행기록이 없습니다." });
     }
+
+    const food = Number(live?.foodComplete ?? weekly?.food) || 0;
+    const bmart = Number(live?.bmartComplete ?? weekly?.bmart) || 0;
+    const store = Number(live?.storeComplete ?? weekly?.store) || 0;
+    const out = Number(live?.slaOutComplete ?? weekly?.out) || 0;
+    const componentTotal = food + bmart + store + out;
+    const total = componentTotal || Number(live?.allDayComplete ?? weekly?.val) || 0;
+
+    const peak = live?.deliveryPeakTimeCount;
+    const hasPeak = peak && ["morning", "afternoon", "evening", "midnight"]
+      .some(k => peak[k] !== undefined && peak[k] !== null);
+    const hourly = Array.isArray(live?.hourlyCompleted) && live.hourlyCompleted.length
+      ? live.hourlyCompleted
+      : null;
 
     res.json({
       ok: true,
       data: {
         name: rider.name,
         userId: rider.userId,
-        total: Number(rider.val) || 0,
-        food: Number(rider.food) || 0,
-        bmart: Number(rider.bmart) || 0,
-        store: Number(rider.store) || 0,
-        out: Number(rider.out) || 0
+        total,
+        food,
+        bmart,
+        store,
+        out,
+        // 원본이 없는 순간에는 키 자체를 보내지 않는다. 프론트가 마지막 정상값을 보존한다.
+        ...(hasPeak ? { deliveryPeakTimeCount: { ...peak } } : {}),
+        ...(hourly ? { hourlyCompleted: hourly } : {})
       }
     });
-
   }
 );
 

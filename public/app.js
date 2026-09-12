@@ -1450,7 +1450,10 @@ function detailRows() {
   if (myToday) {
     const key = dateKey(getBusinessDate());
     const existing = byDate.get(key) || {};
-    byDate.set(key, { ...existing, ...myToday, date: key, deliveryPeakTimeCount: existing.deliveryPeakTimeCount, hourlyCompleted: existing.hourlyCompleted });
+    const merged = { ...existing, ...myToday, date: key };
+    if (!myToday?.deliveryPeakTimeCount && existing.deliveryPeakTimeCount) merged.deliveryPeakTimeCount = existing.deliveryPeakTimeCount;
+    if ((!Array.isArray(myToday?.hourlyCompleted) || !myToday.hourlyCompleted.length) && existing.hourlyCompleted) merged.hourlyCompleted = existing.hourlyCompleted;
+    byDate.set(key, merged);
   }
   return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 }
@@ -2558,10 +2561,10 @@ if (detailMode === "period") renderPeriodDetail();
     e
   );
 
-    myToday = null;
-    detailLoadState.today = "error"; detailLoadError.today = e?.message || "오늘 실적 조회 실패";
+    // 일시적인 LIVE/API 실패가 직전 정상값을 지우지 않도록 유지한다.
+    detailLoadState.today = myToday ? "success" : "error"; detailLoadError.today = e?.message || "오늘 실적 조회 실패";
 
-  if ($("myComplete")) {
+  if ($("myComplete") && !myToday) {
     $("myComplete").textContent = 0;
   }
 
@@ -2710,7 +2713,13 @@ function renderDailyDetail() {
   setDetailRiderNames(); initializeDetailDates(); if(!detailDailyDate)return;
   const key=dateKey(detailDailyDate),bizKey=dateKey(getBusinessDate());
   let row=detailRows().find(r=>String(r.date)===key);
-  if(key===bizKey&&myToday){ row={...(row||{}),...myToday,date:key,deliveryPeakTimeCount:row?.deliveryPeakTimeCount,hourlyCompleted:row?.hourlyCompleted}; }
+  if(key===bizKey&&myToday){
+    const previous=row||{};
+    row={...previous,...myToday,date:key};
+    // 최신 LIVE 값이 있을 때만 교체하고, 순간 누락 시에는 이력/마지막 정상값을 유지한다.
+    if(!myToday.deliveryPeakTimeCount && previous.deliveryPeakTimeCount) row.deliveryPeakTimeCount=previous.deliveryPeakTimeCount;
+    if((!Array.isArray(myToday.hourlyCompleted)||!myToday.hourlyCompleted.length) && previous.hourlyCompleted) row.hourlyCompleted=previous.hourlyCompleted;
+  }
   const p=rowParts(row);
   setText("dailyDateTitle",formatKoreanDate(detailDailyDate)); setText("dailyTotal",row?`${p.total.toLocaleString()}건`:"-");
   setText("dailyFood",row?`${p.food.toLocaleString()}건`:"-"); setText("dailyBmart",row?`${p.bmart.toLocaleString()}건`:"-"); setText("dailyStore",row?`${p.store.toLocaleString()}건`:"-"); setText("dailyOut",row?`${p.out.toLocaleString()}건`:"-");
