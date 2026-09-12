@@ -148,15 +148,7 @@ function goalsForCenter(centerKey) {
 
 async function initOperationalSettings() {
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS rider_operational_settings (
-        center_key TEXT PRIMARY KEY,
-        set_count NUMERIC NOT NULL DEFAULT 10,
-        override_day_type TEXT,
-        override_business_date DATE,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    await ensureOperationalSettingsTable();
     const result = await pool.query(`
       SELECT center_key, set_count, override_day_type,
              TO_CHAR(override_business_date, 'YYYY-MM-DD') AS override_business_date
@@ -175,8 +167,22 @@ async function initOperationalSettings() {
   }
 }
 
+async function ensureOperationalSettingsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rider_operational_settings (
+      center_key TEXT PRIMARY KEY,
+      set_count NUMERIC NOT NULL DEFAULT 10,
+      override_day_type TEXT,
+      override_business_date DATE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
 async function saveOperationalSetting(centerKey, setting) {
-  operationalSettings.set(centerKey, setting);
+  // DB 저장이 성공한 뒤에만 메모리 상태를 갱신한다.
+  // 이렇게 해야 DB 오류인데 화면 숫자만 바뀌는 '가짜 성공' 상태가 생기지 않는다.
+  await ensureOperationalSettingsTable();
   await pool.query(`
     INSERT INTO rider_operational_settings
       (center_key, set_count, override_day_type, override_business_date, updated_at)
@@ -187,6 +193,7 @@ async function saveOperationalSetting(centerKey, setting) {
       override_business_date=EXCLUDED.override_business_date,
       updated_at=NOW()
   `, [centerKey, setting.setCount, setting.overrideDayType, setting.overrideBusinessDate]);
+  operationalSettings.set(centerKey, setting);
 }
 
 initOperationalSettings();
@@ -2835,6 +2842,7 @@ app.post("/api/admin/operational-settings/set-count", auth, async (req, res) => 
     await saveOperationalSetting(req.account.centerKey, next);
     res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
   } catch (err) {
+    console.error("[OPERATION SETTINGS SET-COUNT SAVE FAILED]", err.message);
     res.status(500).json({ ok:false, message:"세트수 저장에 실패했습니다." });
   }
 });
@@ -2857,6 +2865,7 @@ app.post("/api/admin/operational-settings/day-basis", auth, async (req, res) => 
     await saveOperationalSetting(req.account.centerKey, next);
     res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
   } catch (err) {
+    console.error("[OPERATION SETTINGS DAY-BASIS SAVE FAILED]", err.message);
     res.status(500).json({ ok:false, message:"요일 기준 저장에 실패했습니다." });
   }
 });
