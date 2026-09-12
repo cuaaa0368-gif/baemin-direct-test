@@ -650,8 +650,10 @@
     ====================================================== -->
     <section id="detailPage" class="sub-page hidden">
       <div class="page-head detail-page-head">
-        <button class="back-btn" data-page="control" type="button" aria-label="뒤로">‹</button>
-        <div><h2>상세정보</h2><small>나의 배달 실적</small></div>
+        <div class="page-head-copy">
+          <h2>상세정보</h2>
+          <div class="page-head-meta"><small>나의 배달 실적</small><small class="history-retention-note">최근 90일 기록을 보관합니다</small></div>
+        </div>
       </div>
 
       <div class="detail-tabs" role="tablist" aria-label="상세정보 조회 방식">
@@ -701,7 +703,6 @@
         <article class="detail-card calendar-card">
           <div id="monthlyCalendar" class="monthly-calendar"></div>
         </article>
-        <p class="monthly-limit-note">최대 90일까지 조회가 가능합니다</p>
         <div class="monthly-bottom-row">
           <section class="heat-legend"><strong>색상 안내 <small>(일 배달 건수)</small></strong><div>
             <span><i class="heat-1"></i>1~30</span><span><i class="heat-2"></i>31~60</span><span><i class="heat-3"></i>61~90</span><span><i class="heat-4"></i>91 이상</span>
@@ -750,13 +751,6 @@
     >
 
       <div class="page-head">
-
-        <button
-          class="back-btn"
-          data-page="control"
-        >
-          ‹
-        </button>
 
         <div>
 

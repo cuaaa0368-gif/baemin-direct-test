@@ -1943,3 +1943,200 @@ nav button.active{
   #detailPage .custom-period-fields{grid-template-columns:1fr;gap:10px}
   #detailPage .custom-period-fields b{display:none}
 }
+
+/* =========================================================
+   2026-09-13 DEVICE FEEDBACK PASS — header/tabs/calendar/modal
+   Keeps data and navigation logic intact; visual corrections only.
+========================================================= */
+
+/* Sub-page titles: ranking header is the single visual reference. */
+#rankingPage .page-head,
+#detailPage .page-head{
+  display:flex;
+  align-items:flex-start;
+  gap:0;
+  margin-bottom:18px;
+}
+#rankingPage .page-head>div,
+#detailPage .page-head-copy{width:100%;min-width:0}
+#rankingPage .page-head h2,
+#detailPage .page-head h2{
+  margin:0;
+  font-size:23px;
+  line-height:1.2;
+  font-weight:900;
+  letter-spacing:-1px;
+  text-align:left;
+}
+#rankingPage .page-head small,
+#detailPage .page-head small{
+  display:block;
+  margin-top:3px;
+  color:#9ca3af;
+  font-size:10px;
+  line-height:1.35;
+  font-weight:400;
+}
+#detailPage .page-head-meta{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  min-width:0;
+}
+#detailPage .history-retention-note{
+  flex:0 0 auto;
+  text-align:right;
+  white-space:nowrap;
+  font-size:clamp(8px,2.25vw,10px);
+  color:#9ca3af;
+}
+
+/* Detail tabs deliberately match the current ranking tab buttons. */
+#detailPage .detail-tabs{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+  margin:0 0 16px;
+  padding:0;
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+#detailPage .detail-tab{
+  height:auto;
+  min-height:38px;
+  padding:11px 4px;
+  border:0;
+  border-radius:12px;
+  background:#f3f4f6;
+  color:#6b7280;
+  font-size:12px;
+  line-height:1.2;
+  font-weight:800;
+  white-space:nowrap;
+  box-shadow:none;
+}
+#detailPage .detail-tab.active{
+  background:#20c997;
+  color:#fff;
+  box-shadow:none;
+}
+
+/* Monthly calendar: date owns a dedicated top row, count owns the center. */
+#detailPage .calendar-day{
+  position:relative;
+  display:block;
+  width:100%;
+  min-width:0;
+  aspect-ratio:1/1.2;
+  min-height:0;
+  padding:0;
+  overflow:hidden;
+  box-sizing:border-box;
+  text-align:center;
+}
+#detailPage .calendar-day .day-number{
+  position:absolute;
+  z-index:2;
+  top:clamp(4px,1.2vw,6px);
+  left:2px;
+  right:2px;
+  display:block;
+  padding:0;
+  margin:0;
+  text-align:center;
+  font-size:clamp(9px,2.5vw,11px);
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+}
+#detailPage .calendar-day .day-count{
+  position:absolute;
+  z-index:1;
+  left:2px;
+  right:2px;
+  top:55%;
+  transform:translateY(-50%);
+  display:block;
+  margin:0;
+  padding:0;
+  text-align:center;
+  font-size:clamp(12px,3.45vw,15px);
+  font-weight:950;
+  line-height:1;
+  white-space:nowrap;
+}
+#detailPage .monthly-limit-note{display:none!important}
+
+/* Direct-period popup: balanced date fields and a compact action. */
+#detailPage .custom-period-picker{
+  width:min(430px,100%);
+  display:grid;
+  grid-template-columns:1fr;
+  gap:16px;
+  box-sizing:border-box;
+}
+#detailPage .custom-period-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  text-align:left;
+}
+#detailPage .custom-period-head strong{
+  display:block;
+  flex:1 1 auto;
+  text-align:left;
+}
+#detailPage .custom-period-fields{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);
+  align-items:end;
+  justify-content:center;
+  gap:8px;
+  box-sizing:border-box;
+}
+#detailPage .custom-period-fields label{
+  width:100%;
+  min-width:0;
+  display:grid;
+  gap:7px;
+  box-sizing:border-box;
+}
+#detailPage .custom-period-fields label span{text-align:left}
+#detailPage .custom-period-fields input{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+#detailPage .custom-period-fields b{
+  display:block;
+  align-self:end;
+  padding:0 0 15px;
+  text-align:center;
+}
+#detailPage .custom-period-picker>button{
+  justify-self:center;
+  width:auto;
+  min-width:0;
+  height:38px;
+  padding:0 22px;
+  border-radius:10px;
+  font-size:14px;
+  line-height:1;
+}
+
+/* Never collapse the direct-period fields into a vertically misaligned layout. */
+@media(max-width:359px){
+  #detailPage .custom-period-fields{
+    grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr);
+    gap:5px;
+  }
+  #detailPage .custom-period-fields b{display:block;padding-bottom:15px}
+  #detailPage .custom-period-fields input{padding-inline:5px;font-size:11px}
+}
+#detailPage .custom-period-picker>button{grid-column:1!important}
