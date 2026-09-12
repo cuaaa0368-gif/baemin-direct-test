@@ -39,6 +39,158 @@ const centers = new Map();
 const rejectCenters = new Map();
 const historyCenters = new Map();
 
+
+/* =========================================================
+   지사 운영 설정
+   - 세트수: 관리자가 변경할 때까지 계속 유지
+   - 요일 기준 수동 지정: 해당 영업일(06:00~다음 05:59)에만 유지
+========================================================= */
+const operationalSettings = new Map();
+
+function normalizeSetCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || n > 100) return null;
+  return Math.round(n * 100) / 100;
+}
+
+function getOperationalSetting(centerKey) {
+  const key = String(centerKey || "").trim();
+  const saved = operationalSettings.get(key) || {};
+  const businessDate = businessDateKeyKst();
+  const manualActive =
+    saved.overrideBusinessDate === businessDate &&
+    ["weekday", "saturday", "sunday"].includes(saved.overrideDayType);
+
+  return {
+    centerKey: key,
+    setCount: normalizeSetCount(saved.setCount) ?? 10,
+    overrideDayType: manualActive ? saved.overrideDayType : null,
+    overrideBusinessDate: manualActive ? saved.overrideBusinessDate : null,
+    manualActive
+  };
+}
+
+function goalBaseForBusinessDate(businessDate, overrideDayType = null) {
+  const [y, m, d] = String(businessDate).split("-").map(Number);
+  let day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+
+  // 수동 기준은 해당 영업일에서만 자동 달력/공휴일 판정보다 우선한다.
+  if (overrideDayType === "saturday") day = 6;
+  else if (overrideDayType === "sunday") day = 0;
+  else if (overrideDayType === "weekday") {
+    // 평일 지정은 실제 날짜의 평일 세부 기준을 유지한다.
+    // 금요일이면 금요일 기준, 월~목이면 월~목 기준.
+    if (day === 0 || day === 6) day = 1;
+  }
+
+  return day;
+}
+
+const GOAL_BASES = {
+  morning:   { monThu: 19, fri: 21, sat: 27, sun: 29 },
+  afternoon: { monThu: 18, fri: 21, sat: 22, sun: 22 },
+  evening:   { monThu: 30, fri: 32, sat: 36, sun: 35 },
+  night:     { monThu: 23, fri: 26, sat: 25, sun: 24 }
+};
+
+function goalsForCenter(centerKey) {
+  const setting = getOperationalSetting(centerKey);
+  const businessDate = businessDateKeyKst();
+  const [y, m, d] = businessDate.split("-").map(Number);
+  const actualDay = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const holidayDates = new Set([
+    "2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-03-01","2026-03-02",
+    "2026-05-05","2026-05-24","2026-05-25","2026-06-03","2026-06-06","2026-08-15",
+    "2026-08-17","2026-09-24","2026-09-25","2026-09-26","2026-10-03","2026-10-05",
+    "2026-10-09","2026-12-25"
+  ]);
+
+  let day;
+  if (setting.manualActive) {
+    day = goalBaseForBusinessDate(businessDate, setting.overrideDayType);
+  } else if (businessDate === "2026-07-17") {
+    day = 6;
+  } else if (holidayDates.has(businessDate)) {
+    day = 0;
+  } else {
+    day = actualDay;
+  }
+
+  const pick = base => {
+    if ([1,2,3,4].includes(day)) return base.monThu;
+    if (day === 5) return base.fri;
+    if (day === 6) return base.sat;
+    return base.sun;
+  };
+
+  const goals = {};
+  for (const [key, base] of Object.entries(GOAL_BASES)) {
+    goals[key] = Math.round(pick(base) * setting.setCount * 100) / 100;
+  }
+
+  let basisLabel;
+  if ([1,2,3,4].includes(day)) basisLabel = "평일 기준";
+  else if (day === 5) basisLabel = "금요일 기준";
+  else if (day === 6) basisLabel = "토요일 기준";
+  else basisLabel = "일요일 기준";
+
+  return {
+    goals,
+    state: {
+      businessDate,
+      setCount: setting.setCount,
+      manualActive: setting.manualActive,
+      overrideDayType: setting.overrideDayType,
+      basisLabel
+    }
+  };
+}
+
+async function initOperationalSettings() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rider_operational_settings (
+        center_key TEXT PRIMARY KEY,
+        set_count NUMERIC NOT NULL DEFAULT 10,
+        override_day_type TEXT,
+        override_business_date DATE,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const result = await pool.query(`
+      SELECT center_key, set_count, override_day_type,
+             TO_CHAR(override_business_date, 'YYYY-MM-DD') AS override_business_date
+      FROM rider_operational_settings
+    `);
+    for (const row of result.rows) {
+      operationalSettings.set(String(row.center_key), {
+        setCount: normalizeSetCount(row.set_count) ?? 10,
+        overrideDayType: row.override_day_type || null,
+        overrideBusinessDate: row.override_business_date || null
+      });
+    }
+    console.log("[OPERATION SETTINGS DB LOADED]", result.rows.length);
+  } catch (err) {
+    console.error("[OPERATION SETTINGS DB LOAD FAILED]", err.message);
+  }
+}
+
+async function saveOperationalSetting(centerKey, setting) {
+  operationalSettings.set(centerKey, setting);
+  await pool.query(`
+    INSERT INTO rider_operational_settings
+      (center_key, set_count, override_day_type, override_business_date, updated_at)
+    VALUES ($1,$2,$3,$4,NOW())
+    ON CONFLICT (center_key) DO UPDATE SET
+      set_count=EXCLUDED.set_count,
+      override_day_type=EXCLUDED.override_day_type,
+      override_business_date=EXCLUDED.override_business_date,
+      updated_at=NOW()
+  `, [centerKey, setting.setCount, setting.overrideDayType, setting.overrideBusinessDate]);
+}
+
+initOperationalSettings();
+
 /* =========================================================
    실시간 누적값 안정화
    - 같은 영업일의 누적 완료/피크/시간대 값은 감소하지 않는다.
@@ -772,6 +924,17 @@ addAccount({
   name: "강남"
 });
 
+/*
+ * 서초 마스터 테스트 계정
+ */
+addAccount({
+  loginId: "master_321",
+  password: "5567",
+  role: "master",
+  centerKey: "seocho",
+  name: "서초 마스터"
+});
+
 
 /* =========================================================
    영구 로그인 토큰
@@ -935,6 +1098,7 @@ function centerAllowed(a, key) {
 ========================================================= */
 
 function publicPayload(d) {
+  const operational = goalsForCenter(d.centerKey);
   return {
     centerKey: d.centerKey,
     centerName: d.centerName,
@@ -943,7 +1107,8 @@ function publicPayload(d) {
 
     summary: d.summary,
     peaks: d.peaks,
-    goals: d.goals,
+    goals: operational.goals,
+    operationalState: operational.state,
 
     // 기존 랭킹
     ranking: d.ranking,
@@ -2421,11 +2586,9 @@ for (const row of myDaily) {
 
  const weekday =
   weekdayNamesFull[
-    (
-      new Date(
-        Date.UTC(y, m - 1, d)
-      ).getUTCDay() + 1
-    ) % 7
+    new Date(
+      Date.UTC(y, m - 1, d)
+    ).getUTCDay()
   ];
 
 
@@ -2643,6 +2806,60 @@ app.get(
 
   }
 );
+
+/* =========================================================
+   관리자 - 지사 운영 설정
+========================================================= */
+app.get("/api/admin/operational-settings", auth, (req, res) => {
+  if (req.account.role !== "master" && req.account.role !== "superadmin") {
+    return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
+  }
+  res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
+});
+
+app.post("/api/admin/operational-settings/set-count", auth, async (req, res) => {
+  if (req.account.role !== "master" && req.account.role !== "superadmin") {
+    return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
+  }
+  const setCount = normalizeSetCount(req.body?.setCount);
+  if (setCount == null) {
+    return res.status(400).json({ ok:false, message:"세트수는 0보다 큰 숫자로 입력해주세요." });
+  }
+  const current = getOperationalSetting(req.account.centerKey);
+  const next = {
+    setCount,
+    overrideDayType: current.overrideDayType,
+    overrideBusinessDate: current.overrideBusinessDate
+  };
+  try {
+    await saveOperationalSetting(req.account.centerKey, next);
+    res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
+  } catch (err) {
+    res.status(500).json({ ok:false, message:"세트수 저장에 실패했습니다." });
+  }
+});
+
+app.post("/api/admin/operational-settings/day-basis", auth, async (req, res) => {
+  if (req.account.role !== "master" && req.account.role !== "superadmin") {
+    return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
+  }
+  const dayType = String(req.body?.dayType || "");
+  if (!["weekday","saturday","sunday"].includes(dayType)) {
+    return res.status(400).json({ ok:false, message:"요일 기준을 선택해주세요." });
+  }
+  const current = getOperationalSetting(req.account.centerKey);
+  const next = {
+    setCount: current.setCount,
+    overrideDayType: dayType,
+    overrideBusinessDate: businessDateKeyKst()
+  };
+  try {
+    await saveOperationalSetting(req.account.centerKey, next);
+    res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
+  } catch (err) {
+    res.status(500).json({ ok:false, message:"요일 기준 저장에 실패했습니다." });
+  }
+});
 
 /* =========================================================
    관리자 - 주간 거절률 20% 초과 기사

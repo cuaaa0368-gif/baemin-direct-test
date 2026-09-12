@@ -10,6 +10,8 @@ let myToday = null;
 let myTodayBusinessKey = "";
 
 let rankingMode = "champions";
+let operationalState = null;
+let pendingDayBasis = null;
 
 const $ = id => document.getElementById(id);
 
@@ -2118,6 +2120,72 @@ $("myCompleteModalClose")
   );
 
 /* =========================================================
+   관리자 운영 설정
+========================================================= */
+function isAdminUser() {
+  return user?.role === "master" || user?.role === "superadmin";
+}
+
+function renderOperationalControls(state = operationalState) {
+  const wrap = $("adminOperationControls");
+  if (!wrap) return;
+  if (!isAdminUser()) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  if (!state) return;
+
+  operationalState = state;
+  const dayBtn = $("dayBasisBtn");
+  const setBtn = $("setCountBtn");
+  if (dayBtn) {
+    dayBtn.textContent = state.basisLabel || "요일 기준";
+    dayBtn.classList.toggle("manual-active", Boolean(state.manualActive));
+  }
+  if (setBtn) setBtn.textContent = `세트수 ${state.setCount ?? 10}`;
+}
+
+function inferredDayBasis(state) {
+  if (state?.overrideDayType) return state.overrideDayType;
+  const label = String(state?.basisLabel || "");
+  if (label.includes("토요일")) return "saturday";
+  if (label.includes("일요일")) return "sunday";
+  return "weekday";
+}
+
+function selectDayBasis(value) {
+  pendingDayBasis = value;
+  document.querySelectorAll("[data-day-basis]").forEach(btn => {
+    btn.classList.toggle("selected", btn.dataset.dayBasis === value);
+  });
+}
+
+function openDayBasisModal() {
+  if (!isAdminUser()) return;
+  selectDayBasis(inferredDayBasis(operationalState));
+  $("dayBasisModal")?.classList.remove("hidden");
+}
+
+function openSetCountModal() {
+  if (!isAdminUser()) return;
+  const input = $("setCountInput");
+  if (input) input.value = operationalState?.setCount ?? 10;
+  $("setCountModal")?.classList.remove("hidden");
+  setTimeout(() => input?.focus(), 0);
+}
+
+async function refreshOperationalState() {
+  if (!isAdminUser()) return;
+  try {
+    const result = await api("/api/admin/operational-settings");
+    renderOperationalControls(result.data);
+  } catch (e) {
+    console.warn("운영 설정 조회:", e);
+  }
+}
+
+/* =========================================================
    MAIN
 ========================================================= */
 
@@ -2143,6 +2211,8 @@ function renderMain(d) {
 
 
   renderStatusPeaks(d);
+
+  if (d.operationalState) renderOperationalControls(d.operationalState);
 
 
   renderRanking(d);
@@ -2220,6 +2290,8 @@ async function load() {
 
     user =
       me.user;
+
+    renderOperationalControls();
 
 
     /* =====================================================
@@ -2888,6 +2960,63 @@ $("periodNext")?.addEventListener("click",()=>{
   periodStartDate=nextStart; periodEndDate=nextEnd; renderPeriodDetail();
 });
 
+
+/* =========================================================
+   관리자 운영 설정 이벤트
+========================================================= */
+$("dayBasisBtn")?.addEventListener("click", openDayBasisModal);
+$("setCountBtn")?.addEventListener("click", openSetCountModal);
+
+$("dayBasisModalClose")?.addEventListener("click", () => $("dayBasisModal")?.classList.add("hidden"));
+$("setCountModalClose")?.addEventListener("click", () => $("setCountModal")?.classList.add("hidden"));
+$("dayBasisModal")?.addEventListener("click", e => { if (e.target === $("dayBasisModal")) $("dayBasisModal").classList.add("hidden"); });
+$("setCountModal")?.addEventListener("click", e => { if (e.target === $("setCountModal")) $("setCountModal").classList.add("hidden"); });
+
+document.querySelectorAll("[data-day-basis]").forEach(btn => {
+  btn.addEventListener("click", () => selectDayBasis(btn.dataset.dayBasis));
+});
+
+$("dayBasisConfirm")?.addEventListener("click", async () => {
+  if (!pendingDayBasis) return;
+  try {
+    const result = await api("/api/admin/operational-settings/day-basis", {
+      method:"POST",
+      body:JSON.stringify({ dayType:pendingDayBasis })
+    });
+    renderOperationalControls(result.data);
+    if (data) {
+      const center = await api("/api/center/" + encodeURIComponent(user.centerKey));
+      data = center.data;
+      renderMain(data);
+    }
+    $("dayBasisModal")?.classList.add("hidden");
+  } catch (e) {
+    alert(e.message || "요일 기준 변경에 실패했습니다.");
+  }
+});
+
+$("setCountConfirm")?.addEventListener("click", async () => {
+  const value = Number($("setCountInput")?.value);
+  if (!Number.isFinite(value) || value <= 0) {
+    alert("세트수를 올바르게 입력해주세요.");
+    return;
+  }
+  try {
+    const result = await api("/api/admin/operational-settings/set-count", {
+      method:"POST",
+      body:JSON.stringify({ setCount:value })
+    });
+    renderOperationalControls(result.data);
+    if (data) {
+      const center = await api("/api/center/" + encodeURIComponent(user.centerKey));
+      data = center.data;
+      renderMain(data);
+    }
+    $("setCountModal")?.classList.add("hidden");
+  } catch (e) {
+    alert(e.message || "세트수 변경에 실패했습니다.");
+  }
+});
 
 /* =========================================================
    PAGE
