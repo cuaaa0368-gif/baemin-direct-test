@@ -146,57 +146,18 @@ function goalsForCenter(centerKey) {
   };
 }
 
-async function initOperationalSettings() {
-  try {
-    await ensureOperationalSettingsTable();
-    const result = await pool.query(`
-      SELECT center_key, set_count, override_day_type,
-             TO_CHAR(override_business_date, 'YYYY-MM-DD') AS override_business_date
-      FROM rider_operational_settings
-    `);
-    for (const row of result.rows) {
-      operationalSettings.set(String(row.center_key), {
-        setCount: normalizeSetCount(row.set_count) ?? 10,
-        overrideDayType: row.override_day_type || null,
-        overrideBusinessDate: row.override_business_date || null
-      });
-    }
-    console.log("[OPERATION SETTINGS DB LOADED]", result.rows.length);
-  } catch (err) {
-    console.error("[OPERATION SETTINGS DB LOAD FAILED]", err.message);
-  }
+// 현재 단계에서는 운영 설정을 DB에 저장하지 않는다.
+// Render 프로세스 메모리에서만 유지한다.
+// - 세트수: 프로세스가 살아있는 동안 관리자가 다시 변경할 때까지 유지
+// - 요일 수동 기준: 현재 영업일에만 유효하고 다음 06:00부터 자동 무효
+function saveOperationalSetting(centerKey, setting) {
+  operationalSettings.set(String(centerKey || "").trim(), {
+    setCount: normalizeSetCount(setting?.setCount) ?? 10,
+    overrideDayType: setting?.overrideDayType || null,
+    overrideBusinessDate: setting?.overrideBusinessDate || null
+  });
 }
 
-async function ensureOperationalSettingsTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS rider_operational_settings (
-      center_key TEXT PRIMARY KEY,
-      set_count NUMERIC NOT NULL DEFAULT 10,
-      override_day_type TEXT,
-      override_business_date DATE,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-}
-
-async function saveOperationalSetting(centerKey, setting) {
-  // DB 저장이 성공한 뒤에만 메모리 상태를 갱신한다.
-  // 이렇게 해야 DB 오류인데 화면 숫자만 바뀌는 '가짜 성공' 상태가 생기지 않는다.
-  await ensureOperationalSettingsTable();
-  await pool.query(`
-    INSERT INTO rider_operational_settings
-      (center_key, set_count, override_day_type, override_business_date, updated_at)
-    VALUES ($1,$2,$3,$4,NOW())
-    ON CONFLICT (center_key) DO UPDATE SET
-      set_count=EXCLUDED.set_count,
-      override_day_type=EXCLUDED.override_day_type,
-      override_business_date=EXCLUDED.override_business_date,
-      updated_at=NOW()
-  `, [centerKey, setting.setCount, setting.overrideDayType, setting.overrideBusinessDate]);
-  operationalSettings.set(centerKey, setting);
-}
-
-initOperationalSettings();
 
 /* =========================================================
    실시간 누적값 안정화
@@ -2824,7 +2785,7 @@ app.get("/api/admin/operational-settings", auth, (req, res) => {
   res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
 });
 
-app.post("/api/admin/operational-settings/set-count", auth, async (req, res) => {
+app.post("/api/admin/operational-settings/set-count", auth, (req, res) => {
   if (req.account.role !== "master" && req.account.role !== "superadmin") {
     return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
   }
@@ -2838,16 +2799,11 @@ app.post("/api/admin/operational-settings/set-count", auth, async (req, res) => 
     overrideDayType: current.overrideDayType,
     overrideBusinessDate: current.overrideBusinessDate
   };
-  try {
-    await saveOperationalSetting(req.account.centerKey, next);
-    res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
-  } catch (err) {
-    console.error("[OPERATION SETTINGS SET-COUNT SAVE FAILED]", err.message);
-    res.status(500).json({ ok:false, message:"세트수 저장에 실패했습니다." });
-  }
+  saveOperationalSetting(req.account.centerKey, next);
+  res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
 });
 
-app.post("/api/admin/operational-settings/day-basis", auth, async (req, res) => {
+app.post("/api/admin/operational-settings/day-basis", auth, (req, res) => {
   if (req.account.role !== "master" && req.account.role !== "superadmin") {
     return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
   }
@@ -2861,13 +2817,8 @@ app.post("/api/admin/operational-settings/day-basis", auth, async (req, res) => 
     overrideDayType: dayType,
     overrideBusinessDate: businessDateKeyKst()
   };
-  try {
-    await saveOperationalSetting(req.account.centerKey, next);
-    res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
-  } catch (err) {
-    console.error("[OPERATION SETTINGS DAY-BASIS SAVE FAILED]", err.message);
-    res.status(500).json({ ok:false, message:"요일 기준 저장에 실패했습니다." });
-  }
+  saveOperationalSetting(req.account.centerKey, next);
+  res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
 });
 
 /* =========================================================
