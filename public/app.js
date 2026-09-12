@@ -1510,7 +1510,10 @@ function rowParts(row) {
   const store = rowNumber(source, ["store", "storeComplete", "store_complete", "storeCount"]);
   const out = rowNumber(source, ["out", "outComplete", "slaOutComplete", "sla_out_complete", "outside", "outCount"]);
   const explicitTotal = rowNumber(source, ["total", "totalComplete", "total_complete", "complete", "completeCount", "deliveryCount", "count", "allDayComplete"]);
-  return { total: explicitTotal || (food + bmart + store + out), food, bmart, store, out };
+  // 상세정보의 총합은 항상 시간외까지 포함한다. 유형 데이터가 있으면 유형 합계를 기준으로 사용한다.
+  const typedTotal = food + bmart + store + out;
+  const hasTypedData = ["food","foodComplete","food_complete","foodCount","bmart","bMart","bmartComplete","bmart_complete","bmartCount","store","storeComplete","store_complete","storeCount","out","outComplete","slaOutComplete","sla_out_complete","outside","outCount"].some(k => source[k] !== undefined && source[k] !== null && source[k] !== "");
+  return { total: hasTypedData ? typedTotal : explicitTotal, food, bmart, store, out };
 }
 
 function rowsBetween(start, end) {
@@ -1624,16 +1627,28 @@ function renderMyWeekly() {
   setText("weeklyAverage", valid.length ? `${(totals.total/valid.length).toFixed(1)}건` : "-");
   if (valid.length) {
     const max=valid.reduce((a,b)=>b.value>a.value?b:a), min=valid.reduce((a,b)=>b.value<a.value?b:a);
-    setText("weeklyMax",`${max.value}건`); setText("weeklyMaxDate",formatKoreanDate(parseLocalDate(max.row.date),false).replace(/[()]/g,""));
-    setText("weeklyMin",`${min.value}건`); setText("weeklyMinDate",formatKoreanDate(parseLocalDate(min.row.date),false).replace(/[()]/g,""));
+    setText("weeklyMax",`${max.value}건`);
+    setText("weeklyMin",`${min.value}건`);
   } else {
-    setText("weeklyMax","-"); setText("weeklyMaxDate","-"); setText("weeklyMin","-"); setText("weeklyMinDate","-");
+    setText("weeklyMax","-"); setText("weeklyMin","-");
   }
 
   const prevStart=addDays(detailWeekStart,-7), prevEnd=addDays(detailWeekStart,-1);
   const prevRows=rowsBetween(prevStart,prevEnd), prevTotal=sumRows(prevRows).total;
   setText("previousWeekTotal",prevRows.length?`${prevTotal.toLocaleString()}건`:"-");
-  setText("weeklyCompare", rows.length&&prevRows.length&&prevTotal>0 ? `${totals.total>=prevTotal?"▲":"▼"} ${Math.abs((totals.total-prevTotal)/prevTotal*100).toFixed(1)}% (지난주 대비)` : "비교 데이터 없음");
+  const compareEl = $("weeklyCompare");
+  if (compareEl) {
+    if (rows.length && prevRows.length && prevTotal > 0) {
+      const diff = totals.total - prevTotal;
+      compareEl.textContent = `${diff>0?"▲":diff<0?"▼":"•"} ${Math.abs(diff/prevTotal*100).toFixed(1)}% (지난주 대비)`;
+      compareEl.classList.toggle("up", diff > 0);
+      compareEl.classList.toggle("down", diff < 0);
+      compareEl.classList.toggle("same", diff === 0);
+    } else {
+      compareEl.textContent = "비교 데이터 없음";
+      compareEl.classList.remove("up","down","same");
+    }
+  }
 
   const hasTypes = rows.some(r => !r.__weeklyFallback && (rowParts(r).food || rowParts(r).bmart || rowParts(r).store || rowParts(r).out || r.deliveryAcceptanceCount));
   for (const [id,val] of [["weeklyFood",totals.food],["weeklyBmart",totals.bmart],["weeklyStore",totals.store],["weeklyOut",totals.out]]) setText(id,hasTypes?`${val.toLocaleString()}건`:"-");
@@ -2567,8 +2582,7 @@ function heatClass(count) {
   if (count <= 30) return "heat-1";
   if (count <= 60) return "heat-2";
   if (count <= 90) return "heat-3";
-  if (count <= 120) return "heat-4";
-  return "heat-5";
+  return "heat-4";
 }
 
 function renderRecentMonths() {
@@ -2588,13 +2602,13 @@ function renderMonthlyCalendar() {
   let html="";
   for(let d=new Date(gridStart);d<=gridEnd;d=addDays(d,1)){
     const key=dateKey(d),row=rowMap.get(key),count=row?rowParts(row).total:0,other=d.getMonth()!==month;
-    html+=`<button type="button" class="calendar-day ${row?heatClass(count):"heat-0"} ${other?"other-month":""} ${d.getDay()===0?"sunday":""} ${d.getDay()===6?"saturday":""}" data-date="${key}" ${row?"":"disabled"}><span class="day-number">${d.getDate()}</span><span class="day-count">${row?`${count}건`:"-"}</span></button>`;
+    html+=`<button type="button" class="calendar-day ${row?heatClass(count):"heat-0"} ${other?"other-month":""} ${d.getDay()===0?"sunday":""} ${d.getDay()===6?"saturday":""}" data-date="${key}" ${row?"":"disabled"}><span class="day-number">${d.getDate()}</span><span class="day-count">${row&&count>0?`${count}건`:""}</span></button>`;
   }
   calendar.innerHTML=html;
   calendar.querySelectorAll(".calendar-day[data-date]:not(:disabled)").forEach(btn=>btn.addEventListener("click",()=>openCalendarDayModal(btn.dataset.date)));
   const prefix=`${year}-${String(month+1).padStart(2,"0")}`,monthRows=rows.filter(r=>String(r.date).startsWith(prefix)),sums=sumRows(monthRows);
   setText("monthTotal",monthRows.length?`${sums.total.toLocaleString()}건`:"-"); setText("monthAverage",monthRows.length?`${(sums.total/monthRows.length).toFixed(1)}건`:"-");
-  if(monthRows.length){const maxRow=monthRows.reduce((a,b)=>rowParts(b).total>rowParts(a).total?b:a);setText("monthMax",`${rowParts(maxRow).total}건`);setText("monthMaxDate",formatKoreanDate(parseLocalDate(maxRow.date),false).replace(/[()]/g,""));}else{setText("monthMax","-");setText("monthMaxDate","-");}
+  if(monthRows.length){const maxRow=monthRows.reduce((a,b)=>rowParts(b).total>rowParts(a).total?b:a);setText("monthMax",`${rowParts(maxRow).total}건`);}else{setText("monthMax","-");}
   const [kind,msg]=historyStatusMessage("monthly"); setDetailState("monthlyDataState",kind,msg);
   const minMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth()-2,1),maxMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth(),1);
   $("calendarPrev").disabled=new Date(year,month-1,1)<minMonth; $("calendarNext").disabled=new Date(year,month+1,1)>maxMonth;
@@ -2624,31 +2638,50 @@ $("calendarDayModal")?.addEventListener("click", e => {
    DAILY DETAIL
 ========================================================= */
 
+const detailHourlyCache = new Map();
+const detailPeakCache = new Map();
+
+function normalizeHourLabel(value) {
+  const match = String(value ?? "").match(/(\d{1,2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  return Number.isFinite(hour) && hour >= 0 && hour <= 23 ? hour : null;
+}
+
 function extractHourly(row) {
   const raw = row?.hourlyCompleted;
   if (!Array.isArray(raw) || !raw.length) return [];
-  return raw.map((item,index)=>{
-    if (typeof item === "number") return { label:String(index).padStart(2,"0"), value:Number(item)||0 };
-    if (!item || typeof item !== "object") return null;
-    const hour=item.hour ?? item.time ?? item.label ?? item.hourOfDay ?? item.startHour ?? index;
-    const value=item.count ?? item.complete ?? item.completed ?? item.value ?? item.total ?? 0;
-    return {label:String(hour).replace(/:00$/,""),value:Number(value)||0};
-  }).filter(Boolean);
+  const byHour = new Map();
+  raw.forEach((item,index)=>{
+    let hour, value;
+    if (typeof item === "number") { hour=index; value=Number(item)||0; }
+    else if (item && typeof item === "object") {
+      hour=normalizeHourLabel(item.hour ?? item.time ?? item.label ?? item.hourOfDay ?? item.startHour ?? index);
+      value=Number(item.count ?? item.complete ?? item.completed ?? item.value ?? item.total ?? 0)||0;
+    }
+    if (hour !== null && hour !== undefined) byHour.set(hour,value);
+  });
+  const order=[...Array.from({length:18},(_,i)=>i+6),0,1,2,3,4,5];
+  return order.map(hour=>({label:String(hour).padStart(2,"0"),value:byHour.get(hour)||0}));
 }
 
-function renderHourly(row) {
+function renderHourly(row, key="") {
   const box=$("dailyHourlyChart"),note=$("dailyHourlyNote"); if(!box)return;
-  const items=extractHourly(row);
+  let items=extractHourly(row);
+  if(items.length && key) detailHourlyCache.set(key,items);
+  if(!items.length && key && detailHourlyCache.has(key)) items=detailHourlyCache.get(key);
   if(!items.length){box.innerHTML=`<div class="daily-hourly-empty">이 날짜에는 시간대별 원본 데이터가 제공되지 않았습니다.<br>가짜 막대는 표시하지 않습니다.</div>`; if(note)note.classList.add("hidden"); return;}
   const max=Math.max(1,...items.map(x=>x.value));
-  box.innerHTML=items.map(x=>`<div class="hourly-item"><strong>${x.value}</strong><i style="height:${Math.max(3,x.value/max*86)}px"></i><span>${escapeHtml(x.label)}</span></div>`).join("");
+  box.innerHTML=`<div class="daily-hourly-track">${items.map(x=>`<div class="hourly-item"><strong>${x.value>0?x.value:""}</strong><i class="${x.value>0?"":"zero"}" style="height:${x.value>0?Math.max(4,x.value/max*92):2}px"></i><span>${x.label}</span></div>`).join("")}</div>`;
   if(note)note.classList.add("hidden");
 }
 
-function renderPeaks(row) {
-  const peak=row?.deliveryPeakTimeCount || row || {};
+function renderPeaks(row, key="") {
+  let peak=row?.deliveryPeakTimeCount || null;
   const keys=[["dailyPeakMorning","morning"],["dailyPeakAfternoon","afternoon"],["dailyPeakEvening","evening"],["dailyPeakMidnight","midnight"]];
-  const has=keys.some(([,k])=>peak[k]!==undefined&&peak[k]!==null);
+  let has=!!peak && keys.some(([,k])=>peak[k]!==undefined&&peak[k]!==null);
+  if(has && key) detailPeakCache.set(key,{...peak});
+  if(!has && key && detailPeakCache.has(key)){ peak=detailPeakCache.get(key); has=true; }
   keys.forEach(([id,k])=>setText(id,has?`${Number(peak[k])||0}건`:"-"));
   const note=$("dailyPeakNote"); if(note){note.textContent=has?"":"이 날짜에는 피크타임 원본 데이터가 제공되지 않았습니다.";note.classList.toggle("hidden",has);}
 }
@@ -2660,8 +2693,9 @@ function renderDailyDetail() {
   if(key===bizKey&&myToday){ row={...(row||{}),...myToday,date:key,deliveryPeakTimeCount:row?.deliveryPeakTimeCount,hourlyCompleted:row?.hourlyCompleted}; }
   const p=rowParts(row);
   setText("dailyDateTitle",formatKoreanDate(detailDailyDate)); setText("dailyTotal",row?`${p.total.toLocaleString()}건`:"-");
-  setText("dailyFood",row?p.food.toLocaleString():"-"); setText("dailyBmart",row?p.bmart.toLocaleString():"-"); setText("dailyStore",row?p.store.toLocaleString():"-"); setText("dailyOut",row?p.out.toLocaleString():"-");
-  renderHourly(row); renderPeaks(row);
+  setText("dailyFood",row?`${p.food.toLocaleString()}건`:"-"); setText("dailyBmart",row?`${p.bmart.toLocaleString()}건`:"-"); setText("dailyStore",row?`${p.store.toLocaleString()}건`:"-"); setText("dailyOut",row?`${p.out.toLocaleString()}건`:"-");
+  setText("dailyFoodRate",row?rateText(p.food,p.total):"-"); setText("dailyBmartRate",row?rateText(p.bmart,p.total):"-"); setText("dailyStoreRate",row?rateText(p.store,p.total):"-"); setText("dailyOutRate",row?rateText(p.out,p.total):"-");
+  renderHourly(row,key); renderPeaks(row,key);
   if(!row){if(detailLoadState.history==="loading"||detailLoadState.today==="loading")setDetailState("dailyDataState","loading","일별 배달 기록을 불러오는 중입니다.");else if(detailLoadState.history==="error"&&key!==bizKey)setDetailState("dailyDataState","error",detailLoadError.history||"90일 이력을 불러오지 못했습니다.");else setDetailState("dailyDataState","empty","선택한 날짜의 배달 기록이 없습니다.");}else setDetailState("dailyDataState","","");
   const min=historyBounds()?.min || addDays(getBusinessDate(),-89),max=getBusinessDate(); $("dailyPrev").disabled=addDays(detailDailyDate,-1)<min; $("dailyNext").disabled=addDays(detailDailyDate,1)>max;
 }
@@ -2690,10 +2724,10 @@ function renderPeriodDetail() {
   setText("periodRangeTitle", `${formatKoreanDate(periodStartDate)} ~ ${formatKoreanDate(periodEndDate)}`);
   setText("periodTotal", rows.length ? `${sums.total.toLocaleString()}건` : "-");
   setText("periodAverage", `일평균 ${rows.length ? (sums.total/rows.length).toFixed(1) : "-"}건`);
-  setText("periodFood", rows.length ? sums.food.toLocaleString() : "-"); setText("periodFoodRate", rateText(sums.food,sums.total));
-  setText("periodBmart", rows.length ? sums.bmart.toLocaleString() : "-"); setText("periodBmartRate", rateText(sums.bmart,sums.total));
-  setText("periodStore", rows.length ? sums.store.toLocaleString() : "-"); setText("periodStoreRate", rateText(sums.store,sums.total));
-  setText("periodOut", rows.length ? sums.out.toLocaleString() : "-"); setText("periodOutRate", rateText(sums.out,sums.total));
+  setText("periodFood", rows.length ? `${sums.food.toLocaleString()}건` : "-"); setText("periodFoodRate", rateText(sums.food,sums.total));
+  setText("periodBmart", rows.length ? `${sums.bmart.toLocaleString()}건` : "-"); setText("periodBmartRate", rateText(sums.bmart,sums.total));
+  setText("periodStore", rows.length ? `${sums.store.toLocaleString()}건` : "-"); setText("periodStoreRate", rateText(sums.store,sums.total));
+  setText("periodOut", rows.length ? `${sums.out.toLocaleString()}건` : "-"); setText("periodOutRate", rateText(sums.out,sums.total));
 
   const monthMap = new Map();
   rows.forEach(row => {
@@ -2711,16 +2745,6 @@ function renderPeriodDetail() {
     return `<div class="period-month-item"><strong>${total.toLocaleString()}</strong><i style="height:${h}px"></i><span>${Number(m)}월</span><small>일평균 ${(total/rs.length).toFixed(1)}</small></div>`;
   }).join("") || `<div class="empty">데이터가 없습니다.</div>`;
 
-  const tbody = $("periodDailyRows");
-  if (tbody) {
-    const recent = rows.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,periodVisibleRows);
-    tbody.innerHTML = recent.length ? recent.map(row => {
-      const p=rowParts(row), d=parseLocalDate(row.date), wd=["일","월","화","수","목","금","토"][d.getDay()];
-      return `<tr><td>${escapeHtml(row.date)}</td><td>${wd}</td><td>${p.total}</td><td>${p.food}</td><td>${p.bmart}</td><td>${p.store}</td><td>${p.out}</td></tr>`;
-    }).join("") : `<tr><td colspan="7">데이터가 없습니다.</td></tr>`;
-    const more=$("periodMoreDaily");
-    if (more) more.style.visibility = rows.length > periodVisibleRows ? "visible" : "hidden";
-  }
 
   const bounds=historyBounds();
   if (bounds) {
@@ -2799,7 +2823,6 @@ $("periodNext")?.addEventListener("click",()=>{
   periodStartDate=nextStart; periodEndDate=nextEnd; renderPeriodDetail();
 });
 
-$("periodMoreDaily")?.addEventListener("click",()=>{ periodVisibleRows+=10; renderPeriodDetail(); });
 
 /* =========================================================
    PAGE

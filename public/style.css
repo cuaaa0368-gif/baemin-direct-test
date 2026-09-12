@@ -1758,3 +1758,138 @@ nav button.active{
   #detailPage .calendar-day .day-number{font-size:10px}
   #detailPage .calendar-day .day-count{font-size:11px}
 }
+
+/* =========================================================
+   DETAIL UX V3 — mobile-first unified detail information
+   2026-09-12 confirmed UI rules
+========================================================= */
+/* Common date navigation: weekly / monthly / daily / period */
+#detailPage .detail-date-nav,
+#detailPage .calendar-head{
+  width:100%;
+  min-width:0;
+  display:grid;
+  grid-template-columns:46px minmax(0,1fr) 46px;
+  align-items:center;
+  gap:10px;
+  padding:8px;
+  margin:0;
+  background:#fff;
+  border:1px solid var(--d-line);
+  border-radius:15px;
+  box-sizing:border-box;
+}
+#detailPage .detail-date-nav strong,
+#detailPage .calendar-head strong{
+  min-width:0;
+  text-align:center;
+  font-size:17px;
+  line-height:1.25;
+  font-weight:950;
+  letter-spacing:-.6px;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+}
+#detailPage .detail-date-nav button,
+#detailPage .calendar-head button{width:42px;height:42px;justify-self:center}
+
+/* Rider + total: compact name side, roomy total side */
+#detailPage .detail-summary-card{grid-template-columns:minmax(126px,.72fr) minmax(0,1.28fr)}
+#detailPage .detail-rider-block{padding:13px 11px;gap:8px}
+#detailPage .detail-rider-block strong{font-size:14px}
+#detailPage .detail-total-panel{padding:13px 16px}
+#detailPage #weeklyCompare.up{color:#e54848}
+#detailPage #weeklyCompare.down{color:#2878d4}
+#detailPage #weeklyCompare.same{color:#7b858f}
+
+/* Weekly summary: no secondary dates; 2x2 delivery type cards */
+#detailPage .weekly-stats>div{display:flex;flex-direction:column;align-items:center;justify-content:center}
+#detailPage .detail-type-grid.four{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#detailPage .detail-type-grid.four>div{min-height:72px;grid-template-columns:38px minmax(0,1fr);padding:11px 12px}
+
+/* Monthly: same date-nav language, no rider strip */
+#detailPage .monthly-control-row{display:grid;grid-template-columns:1fr;gap:8px}
+#detailPage .calendar-head{flex:none}
+#detailPage .recent-months{width:100%;display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:5px;overflow:visible}
+#detailPage .recent-months button{min-width:0;padding:0 6px}
+#detailPage .calendar-card{padding:9px}
+#detailPage .monthly-calendar{gap:3px}
+#detailPage .calendar-day{aspect-ratio:1.34/1;min-height:0;padding:5px 5px 4px;border-radius:8px;text-align:right}
+#detailPage .calendar-day .day-number{padding:0;text-align:right;font-size:10px}
+#detailPage .calendar-day .day-count{margin-top:6px;text-align:center;font-size:10px}
+#detailPage .calendar-day.heat-0{background:#f7faf9}
+#detailPage .calendar-day.heat-1{background:#e6f8f1}
+#detailPage .calendar-day.heat-2{background:#bcebdc}
+#detailPage .calendar-day.heat-3{background:#67d4b1}
+#detailPage .calendar-day.heat-4{background:#10aa79;color:#063d2d}
+#detailPage .heat-legend>div{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#detailPage .heat-legend i.heat-1{background:#e6f8f1}
+#detailPage .heat-legend i.heat-2{background:#bcebdc}
+#detailPage .heat-legend i.heat-3{background:#67d4b1}
+#detailPage .heat-legend i.heat-4{background:#10aa79}
+#detailPage .monthly-bottom-row{grid-template-columns:1fr;gap:9px}
+#detailPage .month-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:0}
+#detailPage .month-stats>div{min-height:72px;padding:10px 6px;align-items:center;text-align:center}
+#detailPage .month-stats span{font-size:9px}
+#detailPage .month-stats strong,
+#detailPage .month-stats>div:first-child strong{margin-top:5px;font-size:18px;line-height:1.1;font-weight:950}
+
+/* Daily + period type cards are one shared component */
+#detailPage .daily-types,
+#detailPage .period-types{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#detailPage .daily-types>div,
+#detailPage .period-types>div{min-height:82px;padding:11px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#detailPage .daily-types span,#detailPage .period-types span{font-size:9px}
+#detailPage .daily-types strong,#detailPage .period-types strong{font-size:15px;white-space:nowrap}
+#detailPage .daily-types small,#detailPage .period-types small{font-size:8px;white-space:nowrap;overflow:visible;text-overflow:clip}
+
+/* Hourly chart: business day 06 -> 05, 12 bars per mobile viewport */
+#detailPage .daily-hourly-chart{display:block;min-height:168px;padding:0;overflow-x:auto;overflow-y:hidden;border-bottom:0;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+#detailPage .daily-hourly-track{height:158px;display:flex;align-items:flex-end;padding:24px 2px 4px;border-bottom:1px solid #edf1f0;width:200%;min-width:200%}
+#detailPage .hourly-item{flex:0 0 calc(100% / 24);width:calc(100% / 24);min-width:0;height:130px;gap:6px}
+#detailPage .hourly-item strong{height:12px;font-size:10px}
+#detailPage .hourly-item i{width:62%;max-width:28px}
+#detailPage .hourly-item i.zero{opacity:.25;background:#dfe9e5}
+#detailPage .hourly-item span{font-size:10px;font-weight:800}
+
+/* Peak cards: stable compact content, no timetable copy */
+#detailPage .peak-detail-grid>div{min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:9px 3px}
+#detailPage .peak-detail-grid span{font-size:8px}
+#detailPage .peak-detail-grid strong{margin:7px 0 0;font-size:17px}
+
+/* Period: mobile-first, never wider than app viewport */
+#detailPage #periodDetailView{min-width:0;max-width:100%;overflow:hidden}
+#detailPage .period-date-nav{min-width:0}
+#detailPage .period-quick-tabs{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+#detailPage .period-quick-tabs button{min-width:0;padding:0 2px;font-size:9px;white-space:nowrap}
+#detailPage .custom-period-picker{width:100%;min-width:0;box-sizing:border-box}
+#detailPage .custom-period-picker label,#detailPage .custom-period-picker input{min-width:0}
+#detailPage .period-month-chart{max-width:100%;min-width:0;overflow:hidden}
+
+@media(max-width:520px){
+  #detailPage .detail-date-nav,#detailPage .calendar-head{grid-template-columns:40px minmax(0,1fr) 40px;gap:5px;padding:7px}
+  #detailPage .detail-date-nav strong,#detailPage .calendar-head strong{font-size:14px;letter-spacing:-.55px}
+  #detailPage .detail-date-nav button,#detailPage .calendar-head button{width:38px;height:38px}
+  #detailPage .detail-summary-card{grid-template-columns:minmax(116px,.7fr) minmax(0,1.3fr)}
+  #detailPage .detail-rider-block{padding:11px 8px;gap:6px}
+  #detailPage .detail-rider-block strong{font-size:12px}
+  #detailPage .detail-avatar{width:34px;height:34px;flex-basis:34px}
+  #detailPage .detail-total-panel{padding:11px 10px}
+  #detailPage .detail-total-panel strong{font-size:24px}
+  #detailPage .detail-type-grid.four{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  #detailPage .detail-type-grid.four>div{grid-template-columns:32px minmax(0,1fr);min-height:68px;padding:9px 8px}
+  #detailPage .detail-type-grid.four i{width:30px;height:30px}
+  #detailPage .detail-type-grid.four strong{font-size:15px}
+  #detailPage .calendar-day{aspect-ratio:1.28/1;padding:4px}
+  #detailPage .calendar-day .day-count{font-size:9px}
+  #detailPage .heat-legend>div{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #detailPage .daily-types,#detailPage .period-types{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+  #detailPage .daily-types>div,#detailPage .period-types>div{padding:9px 2px;min-height:78px}
+  #detailPage .daily-types strong,#detailPage .period-types strong{font-size:14px}
+  #detailPage .daily-types small,#detailPage .period-types small{font-size:7.5px}
+  #detailPage .period-quick-tabs button{font-size:8px}
+  #detailPage .custom-period-picker{grid-template-columns:minmax(0,1fr) 8px minmax(0,1fr);gap:4px;padding:9px}
+  #detailPage .custom-period-picker input{font-size:8px;padding:0 3px}
+  #detailPage .custom-period-picker>button{grid-column:1/4;width:100%}
+}

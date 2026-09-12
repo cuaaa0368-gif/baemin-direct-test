@@ -492,7 +492,7 @@
 
 
           <strong>
-            내 주간 배달 실적
+            나의 주간 배달 실적
           </strong>
 
 
@@ -651,7 +651,7 @@
     <section id="detailPage" class="sub-page hidden">
       <div class="page-head detail-page-head">
         <button class="back-btn" data-page="control" type="button" aria-label="뒤로">‹</button>
-        <div><h2>상세정보</h2><small>내 배달 실적</small></div>
+        <div><h2>상세정보</h2><small>나의 배달 실적</small></div>
       </div>
 
       <div class="detail-tabs" role="tablist" aria-label="상세정보 조회 방식">
@@ -676,8 +676,8 @@
 
         <div class="detail-stat-grid weekly-stats">
           <div><span>일평균</span><strong id="weeklyAverage">-</strong></div>
-          <div><span>최대</span><strong id="weeklyMax">-</strong><small id="weeklyMaxDate">-</small></div>
-          <div><span>최소</span><strong id="weeklyMin">-</strong><small id="weeklyMinDate">-</small></div>
+          <div><span>최대</span><strong id="weeklyMax">-</strong></div>
+          <div><span>최소</span><strong id="weeklyMin">-</strong></div>
           <div><span>지난주</span><strong id="previousWeekTotal">-</strong></div>
         </div>
 
@@ -695,9 +695,8 @@
 
       <div id="monthlyDetailView" class="detail-view hidden">
         <div id="monthlyDataState" class="detail-data-state hidden" role="status"></div>
-        <section class="detail-rider-strip"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></section>
         <div class="monthly-control-row">
-          <div class="calendar-head"><button id="calendarPrev" type="button" aria-label="이전 달">‹</button><strong id="calendarTitle">-</strong><button id="calendarNext" type="button" aria-label="다음 달">›</button></div>
+          <div class="detail-date-nav calendar-head"><button id="calendarPrev" type="button" aria-label="이전 달">‹</button><strong id="calendarTitle">-</strong><button id="calendarNext" type="button" aria-label="다음 달">›</button></div>
           <div id="recentMonths" class="recent-months"></div>
         </div>
         <article class="detail-card calendar-card">
@@ -706,9 +705,9 @@
         </article>
         <div class="monthly-bottom-row">
           <section class="heat-legend"><strong>색상 안내 <small>(일 배달 건수)</small></strong><div>
-            <span><i class="heat-0"></i>0</span><span><i class="heat-1"></i>1~30</span><span><i class="heat-2"></i>31~60</span><span><i class="heat-3"></i>61~90</span><span><i class="heat-4"></i>91~120</span><span><i class="heat-5"></i>121 이상</span>
+            <span><i class="heat-1"></i>1~30</span><span><i class="heat-2"></i>31~60</span><span><i class="heat-3"></i>61~90</span><span><i class="heat-4"></i>91 이상</span>
           </div></section>
-          <section class="month-stats"><div><span>선택월 합계</span><strong id="monthTotal">-</strong></div><div><span>일평균</span><strong id="monthAverage">-</strong></div><div><span>최대</span><strong id="monthMax">-</strong><small id="monthMaxDate">-</small></div></section>
+          <section class="month-stats"><div><span>선택월 합계</span><strong id="monthTotal">-</strong></div><div><span>일평균</span><strong id="monthAverage">-</strong></div><div><span>최대</span><strong id="monthMax">-</strong></div></section>
         </div>
       </div>
 
@@ -716,9 +715,9 @@
         <div id="dailyDataState" class="detail-data-state hidden" role="status"></div>
         <div class="detail-date-nav"><button id="dailyPrev" type="button" aria-label="이전 날짜">‹</button><strong id="dailyDateTitle">-</strong><button id="dailyNext" type="button" aria-label="다음 날짜">›</button></div>
         <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div><div class="detail-total-panel simple"><span>일일 합계</span><div><strong id="dailyTotal">0건</strong></div></div></section>
-        <div class="detail-stat-grid daily-types"><div><span>음식</span><strong id="dailyFood">-</strong></div><div><span>B마트</span><strong id="dailyBmart">-</strong></div><div><span>스토어</span><strong id="dailyStore">-</strong></div><div><span>시간외</span><strong id="dailyOut">-</strong></div></div>
+        <div class="detail-stat-grid daily-types"><div><span>음식</span><strong id="dailyFood">-</strong><small id="dailyFoodRate">-</small></div><div><span>B마트</span><strong id="dailyBmart">-</strong><small id="dailyBmartRate">-</small></div><div><span>스토어</span><strong id="dailyStore">-</strong><small id="dailyStoreRate">-</small></div><div><span>시간외</span><strong id="dailyOut">-</strong><small id="dailyOutRate">-</small></div></div>
         <article class="detail-card chart-card"><h3>시간대별 배달 건수</h3><div id="dailyHourlyChart" class="daily-hourly-chart"></div><p id="dailyHourlyNote" class="detail-data-note hidden"></p></article>
-        <article class="detail-card"><h3>피크타임 배달 건수</h3><div class="peak-detail-grid"><div><span>아침점심피크</span><strong id="dailyPeakMorning">-</strong><small>평일 09~13시<br>주말·공휴일 09~14시</small></div><div><span>오후논피크</span><strong id="dailyPeakAfternoon">-</strong><small>평일 13~17시<br>주말·공휴일 14~17시</small></div><div class="active"><span>저녁피크</span><strong id="dailyPeakEvening">-</strong><small>17~20시</small></div><div><span>야간논피크</span><strong id="dailyPeakMidnight">-</strong><small>20~24시</small></div></div><p id="dailyPeakNote" class="detail-data-note hidden"></p></article>
+        <article class="detail-card"><h3>피크타임 배달 건수</h3><div class="peak-detail-grid"><div><span>아침점심피크</span><strong id="dailyPeakMorning">-</strong></div><div><span>오후논피크</span><strong id="dailyPeakAfternoon">-</strong></div><div class="active"><span>저녁피크</span><strong id="dailyPeakEvening">-</strong></div><div><span>야간논피크</span><strong id="dailyPeakMidnight">-</strong></div></div><p id="dailyPeakNote" class="detail-data-note hidden"></p></article>
       </div>
 
       <div id="periodDetailView" class="detail-view hidden">
@@ -729,7 +728,6 @@
         <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div><div class="detail-total-panel"><span>기간 합계</span><div><strong id="periodTotal">0건</strong><small id="periodAverage">일평균 -</small></div></div></section>
         <div class="detail-stat-grid period-types"><div><span>음식</span><strong id="periodFood">-</strong><small id="periodFoodRate">-</small></div><div><span>B마트</span><strong id="periodBmart">-</strong><small id="periodBmartRate">-</small></div><div><span>스토어</span><strong id="periodStore">-</strong><small id="periodStoreRate">-</small></div><div><span>시간외</span><strong id="periodOut">-</strong><small id="periodOutRate">-</small></div></div>
         <article class="detail-card chart-card"><h3>월별 배달 건수</h3><div id="periodMonthlyChart" class="period-month-chart"></div></article>
-        <article class="detail-card period-record-card"><div class="detail-card-head"><h3>일별 기록 <small>(최근순)</small></h3><button id="periodMoreDaily" type="button">더보기 ›</button></div><div class="period-table-wrap"><table class="period-table"><thead><tr><th>날짜</th><th>요일</th><th>총 배달</th><th>음식</th><th>B마트</th><th>스토어</th><th>시간외</th></tr></thead><tbody id="periodDailyRows"><tr><td colspan="7">데이터 대기중</td></tr></tbody></table></div></article>
       </div>
     </section>
 
