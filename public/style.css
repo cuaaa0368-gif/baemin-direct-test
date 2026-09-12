@@ -1893,3 +1893,97 @@ nav button.active{
   #detailPage .custom-period-picker input{font-size:8px;padding:0 3px}
   #detailPage .custom-period-picker>button{grid-column:1/4;width:100%}
 }
+
+
+/* =========================================================
+   NURION DETAIL V3 FINAL — 2026-09-12
+   요구사항: 영역/칸 분리, 26년 표기, 요일 표시 제거
+========================================================= */
+#detailPage .detail-stat-grid > div,
+#detailPage .detail-type-grid > div,
+#detailPage .peak-detail-grid > div {
+  border: 1px solid #e6ece9;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(18, 52, 42, .035);
+  min-width: 0;
+}
+
+#detailPage .detail-stat-grid,
+#detailPage .detail-type-grid,
+#detailPage .peak-detail-grid {
+  gap: 8px;
+}
+
+#detailPage .detail-summary-card {
+  border: 1px solid #e5ebe8;
+  overflow: hidden;
+}
+
+#detailPage .detail-rider-block {
+  padding-right: 14px;
+}
+
+#detailPage .detail-total-panel {
+  border-left: 1px solid #dcebe5;
+}
+
+#detailPage .detail-bar-item .bar-day {
+  display: none !important;
+}
+
+#detailPage .detail-bar-item .bar-date {
+  margin-top: 8px;
+  font-weight: 700;
+  color: #59656f;
+}
+
+#detailPage .calendar-weekdays {
+  display: none !important;
+}
+
+#detailPage .monthly-calendar {
+  border-top: 0;
+}
+
+#detailPage .calendar-day {
+  border: 1px solid #e8eeeb;
+  border-radius: 10px;
+  margin: 2px;
+}
+
+#detailPage .calendar-day.sunday .day-number,
+#detailPage .calendar-day.saturday .day-number {
+  color: inherit;
+}
+
+#detailPage .period-types > div,
+#detailPage .daily-types > div {
+  padding: 13px 8px;
+}
+
+#detailPage .period-month-item {
+  min-width: 94px;
+}
+
+@media (max-width: 520px) {
+  #detailPage .detail-stat-grid.weekly-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #detailPage .daily-types,
+  #detailPage .period-types,
+  #detailPage .detail-type-grid.four,
+  #detailPage .peak-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #detailPage .detail-date-nav strong {
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  #detailPage .period-date-nav strong {
+    font-size: 13px;
+  }
+}

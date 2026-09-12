@@ -1488,8 +1488,8 @@ function startOfWedWeek(date) {
 
 function formatKoreanDate(date, withYear = true) {
   if (!date) return "-";
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${withYear ? `${date.getFullYear()}년 ` : ""}${date.getMonth() + 1}월 ${date.getDate()}일 (${weekday})`;
+  const shortYear = String(date.getFullYear()).slice(-2);
+  return `${withYear ? `${shortYear}년 ` : ""}${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
 function rowNumber(row, keys) {
@@ -1657,7 +1657,7 @@ function renderMyWeekly() {
   const days=Array.from({length:7},(_,i)=>addDays(detailWeekStart,i));
   const values=days.map(d=>rowMap.has(dateKey(d))?rowParts(rowMap.get(dateKey(d))).total:null);
   const numeric=values.filter(v=>v!==null), maxValue=Math.max(1,...numeric), maxVal=numeric.length?Math.max(...numeric):null;
-  chart.innerHTML=days.map((d,i)=>{const v=values[i],exists=v!==null,h=exists?Math.max(4,v/maxValue*120):3;return `<div class="detail-bar-item ${exists&&v===maxVal?"max":""}"><span class="bar-value">${exists?v:"-"}</span><i class="bar-column" style="height:${h}px"></i><span class="bar-day">${["일","월","화","수","목","금","토"][d.getDay()]}</span><small class="bar-date">${d.getMonth()+1}/${d.getDate()}</small></div>`}).join("");
+  chart.innerHTML=days.map((d,i)=>{const v=values[i],exists=v!==null,h=exists?Math.max(4,v/maxValue*120):3;return `<div class="detail-bar-item ${exists&&v===maxVal?"max":""}"><span class="bar-value">${exists?v:"-"}</span><i class="bar-column" style="height:${h}px"></i><small class="bar-date">${d.getMonth()+1}/${d.getDate()}</small></div>`}).join("");
 
   if (!rows.length) {
     if (detailLoadState.weekly==="loading" || detailLoadState.history==="loading") setDetailState("weeklyDataState","loading","주간 배달 실적을 불러오는 중입니다.");
@@ -2596,7 +2596,7 @@ function renderRecentMonths() {
 function renderMonthlyCalendar() {
   setDetailRiderNames(); initializeDetailDates();
   const calendar=$("monthlyCalendar"),title=$("calendarTitle"); if(!calendar||!title)return;
-  const year=calendarDate.getFullYear(),month=calendarDate.getMonth(); title.textContent=`${year}년 ${month+1}월`;
+  const year=calendarDate.getFullYear(),month=calendarDate.getMonth(); title.textContent=`${String(year).slice(-2)}년 ${month+1}월`;
   const rows=detailRows(),rowMap=new Map(rows.map(r=>[String(r.date),r]));
   const first=new Date(year,month,1),last=new Date(year,month+1,0),gridStart=addDays(first,-first.getDay()),gridEnd=addDays(last,6-last.getDay());
   let html="";
@@ -2740,9 +2740,9 @@ function renderPeriodDetail() {
   const chart = $("periodMonthlyChart");
   if (chart) chart.innerHTML = monthItems.map(([month,rs]) => {
     const total = sumRows(rs).total;
-    const [,m] = month.split("-");
+    const [y,m] = month.split("-");
     const h = Math.max(4,total/maxMonthTotal*120);
-    return `<div class="period-month-item"><strong>${total.toLocaleString()}</strong><i style="height:${h}px"></i><span>${Number(m)}월</span><small>일평균 ${(total/rs.length).toFixed(1)}</small></div>`;
+    return `<div class="period-month-item"><strong>${total.toLocaleString()}</strong><i style="height:${h}px"></i><span>${String(y).slice(-2)}년 ${Number(m)}월</span><small>일평균 ${(total/rs.length).toFixed(1)}건</small></div>`;
   }).join("") || `<div class="empty">데이터가 없습니다.</div>`;
 
 
