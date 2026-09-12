@@ -1,0 +1,15 @@
+{
+  "name": "rider-control-multicenter-v3",
+  "version": "3.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.16.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
