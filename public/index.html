@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#20c997"
+  >
+
+  <link
+    rel="manifest"
+    href="/manifest.webmanifest"
+  >
+
+  <link
+    rel="icon"
+    type="image/png"
+    href="/nurion-logo-128x128.png"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    href="/nurion-logo-256x256.png"
+  >
+
+  <title>누리온</title>
+
+  <link
+    rel="stylesheet"
+    href="/style.css"
+  >
+
+</head>
+
+
+<body>
+
+
+<!-- =========================================================
+     LOGIN
+========================================================= -->
+
+<section
+  id="login"
+  class="login"
+>
+
+  <div class="loginbox">
+
+    <div class="login-logo">
+
+      <img
+        src="/nurion-logo-256x256.png"
+        alt="누리온"
+      >
+
+    </div>
+
+    <h1>
+      누리온
+    </h1>
+
+    <p>
+      오늘도 안라무복!
+    </p>
+
+    <input
+      id="loginId"
+      type="text"
+      autocomplete="username"
+      placeholder="라이더 아이디"
+    >
+
+    <input
+      id="password"
+      type="password"
+      autocomplete="current-password"
+      placeholder="비밀번호"
+    >
+
+    <button id="loginBtn">
+      로그인
+    </button>
+
+    <em id="loginMsg"></em>
+
+  </div>
+
+</section>
+
+
+
+<!-- =========================================================
+     APP
+========================================================= -->
+
+<section
+  id="app"
+  class="app hidden"
+>
+
+
+  <!-- HEADER -->
+
+  <header>
+
+    <div class="brand">
+
+      <img
+        src="/nurion-logo-256x256.png"
+        class="brand-logo"
+        alt="누리온"
+      >
+
+      <div class="brand-name">
+        <strong>누리온</strong>
+      </div>
+
+    </div>
+
+
+    <div
+      class="live-wrap"
+    >
+           <div class="header-status-row">
+
+        <button
+          class="install-app-btn"
+          id="installAppBtn"
+          type="button"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14"/>
+          </svg>
+          <b>앱설치</b>
+        </button>
+
+      <div
+        class="live"
+        id="live"
+      >
+
+        <i></i>
+
+        <b>
+          WAIT
+        </b>
+
+      </div>
+  </div>
+
+      <div
+        class="last-received"
+        id="lastReceived"
+      >
+        마지막 수신 -
+      </div>
+
+    </div>
+
+  </header>
+
+
+
+  <main>
+
+
+    <!-- 로그아웃 -->
+
+    <div class="userbar">
+
+      <span id="who"></span>
+
+      <button id="logout">
+        로그아웃
+      </button>
+
+    </div>
+
+
+
+    <!-- =====================================================
+         관제
+    ====================================================== -->
+
+    <section
+      id="controlPage"
+      class="page"
+    >
+
+
+      <!-- ===================================================
+           핵심 카드
+      ==================================================== -->
+
+      <div class="top-cards">
+
+
+        <!-- 운행중 -->
+
+        <article class="hero">
+
+          <div>
+
+            <span>
+              운행중
+            </span>
+
+            <div class="hero-number">
+
+              <strong id="runCount">
+                0
+              </strong>
+
+              <em>
+                명
+              </em>
+
+            </div>
+
+          </div>
+
+        </article>
+
+        <!-- 나의 완료 -->
+<article class="my-complete-card">
+  <div>
+    <span>나의 완료</span>
+
+    <div class="my-complete-number">
+      <strong id="myComplete">0</strong>
+      <em>건</em>
+    </div>
+  </div>
+</article>
+
+        <!-- 나의 거절률 -->
+
+        <article class="my-reject-card">
+
+          <span>
+            나의 거절률
+          </span>
+
+          <strong id="myRejectRate">
+            -%
+          </strong>
+
+          <div
+            id="myRejectGuide"
+            class="reject-guide"
+          >
+            데이터 대기중
+          </div>
+
+        </article>
+
+
+      </div>
+
+
+
+      <!-- ===================================================
+           지사 거절률
+      ==================================================== -->
+
+      <article class="branch-reject-card">
+
+        <div class="branch-reject-left">
+
+          <span>
+            지사 거절률
+          </span>
+
+          <strong id="branchRejectRate">
+            -%
+          </strong>
+
+        </div>
+
+
+        <div
+          id="branchRejectGuide"
+          class="branch-reject-guide"
+        >
+          데이터 대기중
+        </div>
+
+      </article>
+
+
+
+      <!-- ===================================================
+           현황
+      ==================================================== -->
+
+      <div class="section-title">
+
+        <h2>
+          현황
+        </h2>
+
+      </div>
+
+
+      <div class="card">
+
+        <div id="peaks">
+
+
+          <!-- 아침점심피크 -->
+
+          <div class="peak">
+
+            <div class="peak-main">
+
+              <div class="peak-label">
+
+                <b>
+                  아침점심피크
+                </b>
+
+                <small>
+                  평일 09:00 - 13:00 / 주말·공휴일 09:00 - 14:00
+                </small>
+
+              </div>
+
+              <strong>
+                0 / 0
+              </strong>
+
+            </div>
+
+
+            <div class="bar">
+
+              <i style="width:0%"></i>
+
+            </div>
+
+          </div>
+
+
+
+          <!-- 오후논피크 -->
+
+          <div class="peak">
+
+            <div class="peak-main">
+
+              <div class="peak-label">
+
+                <b>
+                  오후논피크
+                </b>
+
+                <small>
+                  평일 13:00 - 17:00 / 주말·공휴일 14:00 - 17:00
+                </small>
+
+              </div>
+
+              <strong>
+                0 / 0
+              </strong>
+
+            </div>
+
+
+            <div class="bar">
+
+              <i style="width:0%"></i>
+
+            </div>
+
+          </div>
+
+
+
+          <!-- 저녁피크 -->
+
+          <div class="peak">
+
+            <div class="peak-main">
+
+              <div class="peak-label">
+
+                <b>
+                  저녁피크
+                </b>
+
+                <small>
+                  17:00 - 20:00
+                </small>
+
+              </div>
+
+              <strong>
+                0 / 0
+              </strong>
+
+            </div>
+
+
+            <div class="bar">
+
+              <i style="width:0%"></i>
+
+            </div>
+
+          </div>
+
+
+
+          <!-- 야간논피크 -->
+
+          <div class="peak">
+
+            <div class="peak-main">
+
+              <div class="peak-label">
+
+                <b>
+                  야간논피크
+                </b>
+
+                <small>
+                  20:00 - 24:00
+                </small>
+
+              </div>
+
+              <strong>
+                0 / 0
+              </strong>
+
+            </div>
+
+
+            <div class="bar">
+
+              <i style="width:0%"></i>
+
+            </div>
+
+          </div>
+
+
+        </div>
+
+      </div>
+
+
+
+      <!-- ===================================================
+           QUICK
+      ==================================================== -->
+
+      <div class="quick-grid">
+
+
+        <button
+          class="quick-card"
+          data-page="detail"
+        >
+
+          <div class="quick-top">
+
+            <span>
+              상세정보
+            </span>
+
+            <b>
+              ›
+            </b>
+
+          </div>
+
+
+          <div class="quick-icon">
+            ◷
+          </div>
+
+
+          <strong>
+            내 주간 배달 실적
+          </strong>
+
+
+          <small>
+            일별 배달 건수 확인
+          </small>
+
+        </button>
+
+
+
+        <button
+          class="quick-card"
+          data-page="ranking"
+        >
+
+          <div class="quick-top">
+
+            <span>
+              랭킹
+            </span>
+
+            <b>
+              ›
+            </b>
+
+          </div>
+
+
+          <div class="quick-icon">
+            ♛
+          </div>
+
+
+          <strong>
+            주간 배달 건수 TOP 5
+          </strong>
+
+
+          <small>
+            지사 라이더 랭킹 확인
+          </small>
+
+        </button>
+
+
+      </div>
+
+
+    </section>
+
+<!-- 운행중 기사 팝업 -->
+<div id="runningModal" class="running-modal hidden">
+
+  <div class="running-popup">
+
+    <div class="running-popup-head">
+      <strong>운행중 기사님</strong>
+      <button id="runningModalClose" type="button">×</button>
+    </div>
+
+    <div id="runningRiderList" class="running-rider-list">
+    </div>
+
+  </div>
+
+</div>
+
+<!-- 나의 주간 거절 팝업 -->
+<div id="myRejectModal" class="running-modal hidden">
+
+  <div class="running-popup">
+
+    <div class="running-popup-head">
+      <strong>나의 주간 거절 현황</strong>
+      <small class="my-reject-notice">
+  비마트, 배민스토어, 시간외를 제외한 푸드건 합계입니다.
+</small>
+      <button id="myRejectModalClose" type="button">×</button>
+    </div>
+
+    <div id="myRejectDetail" class="my-complete-detail">
+    </div>
+
+  </div>
+
+</div>
+    
+<!-- 관리자 거절률 팝업 -->
+<div id="adminRejectModal" class="running-modal hidden">
+
+  <div class="running-popup">
+
+    <div class="running-popup-head">
+      <strong>거절률 20% 초과 기사님</strong>
+      <button id="adminRejectModalClose" type="button">×</button>
+    </div>
+
+    <div id="adminRejectRiderList" class="admin-reject-rider-list">
+    </div>
+
+  </div>
+
+</div>
+    
+<!-- 나의 완료 팝업 -->
+<div id="myCompleteModal" class="running-modal hidden">
+
+  <div class="running-popup">
+
+    <div class="running-popup-head">
+      <strong>나의 완료</strong>
+      <button id="myCompleteModalClose" type="button">×</button>
+    </div>
+
+    <div id="myCompleteDetail" class="my-complete-detail">
+
+      <div>
+        <span>푸드</span>
+        <strong id="myCompleteFood">0건</strong>
+      </div>
+
+      <div>
+        <span>B마트</span>
+        <strong id="myCompleteBmart">0건</strong>
+      </div>
+
+      <div>
+        <span>배민스토어</span>
+        <strong id="myCompleteStore">0건</strong>
+      </div>
+
+      <div>
+        <span>시간외</span>
+        <strong id="myCompleteOut">0건</strong>
+     </div>
+      
+
+      <div class="my-complete-total">
+        <span>총 완료</span>
+        <strong id="myCompleteTotal">0건</strong>
+      </div>
+
+    </div>
+          <div id="myCompleteEmpty" class="hidden">
+  운행기록이 없습니다.
+</div>
+
+  </div>
+
+</div>
+    
+    <!-- =====================================================
+         상세정보
+    ====================================================== -->
+    <section id="detailPage" class="sub-page hidden">
+      <div class="page-head detail-page-head">
+        <button class="back-btn" data-page="control" type="button" aria-label="뒤로">‹</button>
+        <div><h2>상세정보</h2><small>내 배달 실적</small></div>
+      </div>
+
+      <div class="detail-tabs" role="tablist" aria-label="상세정보 조회 방식">
+        <button type="button" class="detail-tab active" data-detail-mode="weekly">주간</button>
+        <button type="button" class="detail-tab" data-detail-mode="monthly">월간</button>
+        <button type="button" class="detail-tab" data-detail-mode="daily">일별</button>
+        <button type="button" class="detail-tab" data-detail-mode="period">기간조회</button>
+      </div>
+
+      <div id="weeklyDetailView" class="detail-view">
+        <div id="weeklyDataState" class="detail-data-state hidden" role="status"></div>
+        <div class="detail-date-nav">
+          <button id="weeklyPrev" type="button" aria-label="이전 주">‹</button>
+          <strong id="weekRange">-</strong>
+          <button id="weeklyNext" type="button" aria-label="다음 주">›</button>
+        </div>
+
+        <section class="detail-summary-card">
+          <div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div>
+          <div class="detail-total-panel"><span>주간 합계</span><div><strong id="weeklyTotal">0건</strong><small id="weeklyCompare">-</small></div></div>
+        </section>
+
+        <div class="detail-stat-grid weekly-stats">
+          <div><span>일평균</span><strong id="weeklyAverage">-</strong></div>
+          <div><span>최대</span><strong id="weeklyMax">-</strong><small id="weeklyMaxDate">-</small></div>
+          <div><span>최소</span><strong id="weeklyMin">-</strong><small id="weeklyMinDate">-</small></div>
+          <div><span>지난주</span><strong id="previousWeekTotal">-</strong></div>
+        </div>
+
+        <article class="detail-card chart-card"><h3>요일별 배달 건수</h3><div id="weeklyBarChart" class="detail-bar-chart"></div></article>
+
+        <article class="detail-card"><h3>배달 유형별 합계</h3>
+          <div class="detail-type-grid four">
+            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5c0 2 1 3 3 3s3-1 3-3V3M7 11v10M16 3v18M16 3c3 2 4 5 4 8h-4"></path></svg></i><span>음식</span><strong id="weeklyFood">-</strong><small id="weeklyFoodRate">-</small></div>
+            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10h9.9l2-7H6.2M9 19a1.5 1.5 0 1 0 0 .1M17 19a1.5 1.5 0 1 0 0 .1"></path></svg></i><span>B마트</span><strong id="weeklyBmart">-</strong><small id="weeklyBmartRate">-</small></div>
+            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l-1.2-5H5.2L4 9Zm1 0v11h14V9M8 20v-6h5v6M4 9c0 2 3 2.5 4 0 1 2.5 4 2.5 5 0 1 2.5 4 2.5 5 0"></path></svg></i><span>스토어</span><strong id="weeklyStore">-</strong><small id="weeklyStoreRate">-</small></div>
+            <div><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 7v5l3 2"></path></svg></i><span>시간외</span><strong id="weeklyOut">-</strong><small id="weeklyOutRate">-</small></div>
+          </div>
+        </article>
+      </div>
+
+      <div id="monthlyDetailView" class="detail-view hidden">
+        <div id="monthlyDataState" class="detail-data-state hidden" role="status"></div>
+        <section class="detail-rider-strip"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></section>
+        <div class="monthly-control-row">
+          <div class="calendar-head"><button id="calendarPrev" type="button" aria-label="이전 달">‹</button><strong id="calendarTitle">-</strong><button id="calendarNext" type="button" aria-label="다음 달">›</button></div>
+          <div id="recentMonths" class="recent-months"></div>
+        </div>
+        <article class="detail-card calendar-card">
+          <div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+          <div id="monthlyCalendar" class="monthly-calendar"></div>
+        </article>
+        <div class="monthly-bottom-row">
+          <section class="heat-legend"><strong>색상 안내 <small>(일 배달 건수)</small></strong><div>
+            <span><i class="heat-0"></i>0</span><span><i class="heat-1"></i>1~30</span><span><i class="heat-2"></i>31~60</span><span><i class="heat-3"></i>61~90</span><span><i class="heat-4"></i>91~120</span><span><i class="heat-5"></i>121 이상</span>
+          </div></section>
+          <section class="month-stats"><div><span>선택월 합계</span><strong id="monthTotal">-</strong></div><div><span>일평균</span><strong id="monthAverage">-</strong></div><div><span>최대</span><strong id="monthMax">-</strong><small id="monthMaxDate">-</small></div></section>
+        </div>
+      </div>
+
+      <div id="dailyDetailView" class="detail-view hidden">
+        <div id="dailyDataState" class="detail-data-state hidden" role="status"></div>
+        <div class="detail-date-nav"><button id="dailyPrev" type="button" aria-label="이전 날짜">‹</button><strong id="dailyDateTitle">-</strong><button id="dailyNext" type="button" aria-label="다음 날짜">›</button></div>
+        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div><div class="detail-total-panel simple"><span>일일 합계</span><div><strong id="dailyTotal">0건</strong></div></div></section>
+        <div class="detail-stat-grid daily-types"><div><span>음식</span><strong id="dailyFood">-</strong></div><div><span>B마트</span><strong id="dailyBmart">-</strong></div><div><span>스토어</span><strong id="dailyStore">-</strong></div><div><span>시간외</span><strong id="dailyOut">-</strong></div></div>
+        <article class="detail-card chart-card"><h3>시간대별 배달 건수</h3><div id="dailyHourlyChart" class="daily-hourly-chart"></div><p id="dailyHourlyNote" class="detail-data-note hidden"></p></article>
+        <article class="detail-card"><h3>피크타임 배달 건수</h3><div class="peak-detail-grid"><div><span>아침점심피크</span><strong id="dailyPeakMorning">-</strong><small>평일 09~13시<br>주말·공휴일 09~14시</small></div><div><span>오후논피크</span><strong id="dailyPeakAfternoon">-</strong><small>평일 13~17시<br>주말·공휴일 14~17시</small></div><div class="active"><span>저녁피크</span><strong id="dailyPeakEvening">-</strong><small>17~20시</small></div><div><span>야간논피크</span><strong id="dailyPeakMidnight">-</strong><small>20~24시</small></div></div><p id="dailyPeakNote" class="detail-data-note hidden"></p></article>
+      </div>
+
+      <div id="periodDetailView" class="detail-view hidden">
+        <div id="periodDataState" class="detail-data-state hidden" role="status"></div>
+        <div class="detail-date-nav period-date-nav"><button id="periodPrev" type="button" aria-label="이전 기간">‹</button><strong id="periodRangeTitle">-</strong><button id="periodNext" type="button" aria-label="다음 기간">›</button></div>
+        <div class="period-quick-tabs"><button type="button" data-period-days="7">최근 7일</button><button type="button" data-period-days="30">최근 30일</button><button type="button" class="active" data-period-days="90">최근 90일</button><button type="button" data-period-days="custom">직접선택</button></div>
+        <div id="customPeriodPicker" class="custom-period-picker hidden"><label><span>시작일</span><input id="periodStartDate" type="date"></label><b>~</b><label><span>종료일</span><input id="periodEndDate" type="date"></label><button id="applyCustomPeriod" type="button">조회</button></div>
+        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name">기사님</strong></div><div class="detail-total-panel"><span>기간 합계</span><div><strong id="periodTotal">0건</strong><small id="periodAverage">일평균 -</small></div></div></section>
+        <div class="detail-stat-grid period-types"><div><span>음식</span><strong id="periodFood">-</strong><small id="periodFoodRate">-</small></div><div><span>B마트</span><strong id="periodBmart">-</strong><small id="periodBmartRate">-</small></div><div><span>스토어</span><strong id="periodStore">-</strong><small id="periodStoreRate">-</small></div><div><span>시간외</span><strong id="periodOut">-</strong><small id="periodOutRate">-</small></div></div>
+        <article class="detail-card chart-card"><h3>월별 배달 건수</h3><div id="periodMonthlyChart" class="period-month-chart"></div></article>
+        <article class="detail-card period-record-card"><div class="detail-card-head"><h3>일별 기록 <small>(최근순)</small></h3><button id="periodMoreDaily" type="button">더보기 ›</button></div><div class="period-table-wrap"><table class="period-table"><thead><tr><th>날짜</th><th>요일</th><th>총 배달</th><th>음식</th><th>B마트</th><th>스토어</th><th>시간외</th></tr></thead><tbody id="periodDailyRows"><tr><td colspan="7">데이터 대기중</td></tr></tbody></table></div></article>
+      </div>
+    </section>
+
+    <div id="calendarDayModal" class="detail-modal hidden" role="dialog" aria-modal="true">
+      <div class="detail-modal-box"><div class="detail-modal-head"><div><strong id="calendarDayModalDate">-</strong><small id="calendarDayModalName">기사님</small></div><button id="calendarDayModalClose" type="button" aria-label="닫기">×</button></div><div class="detail-modal-total"><span>총 배달</span><strong id="calendarDayModalTotal">0건</strong></div><div class="detail-modal-grid"><div><span>음식</span><strong id="calendarDayModalFood">-</strong></div><div><span>B마트</span><strong id="calendarDayModalBmart">-</strong></div><div><span>스토어</span><strong id="calendarDayModalStore">-</strong></div><div><span>시간외</span><strong id="calendarDayModalOut">-</strong></div></div></div>
+    </div>
+
+    <!-- =====================================================
+         랭킹
+    ====================================================== -->
+
+    <section
+      id="rankingPage"
+      class="sub-page hidden"
+    >
+
+      <div class="page-head">
+
+        <button
+          class="back-btn"
+          data-page="control"
+        >
+          ‹
+        </button>
+
+        <div>
+
+          <h2>
+            주간 랭킹
+          </h2>
+
+          <small>
+            배달 건수 TOP 5
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <div class="ranking-head">
+
+        <span>
+          이번 주
+        </span>
+
+        <strong>
+          TOP 5
+        </strong>
+
+      </div>
+
+
+      <div
+        id="ranking"
+        class="ranking"
+      >
+
+        <div class="empty">
+          데이터 대기중
+        </div>
+
+      </div>
+
+    </section>
+
+
+
+    <!-- =====================================================
+         더보기
+    ====================================================== -->
+
+    <section
+      id="morePage"
+      class="sub-page hidden"
+    >
+
+      <div class="page-head">
+
+        <div>
+
+          <h2>
+            더보기
+          </h2>
+
+          <small>
+            누리온
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <div class="more-card">
+
+        <span>
+          로그인 계정
+        </span>
+
+        <strong id="myName">
+          -
+        </strong>
+
+      </div>
+
+
+      <div class="more-card">
+
+        <span>
+          소속 지사
+        </span>
+
+        <strong id="myCenter">
+          -
+        </strong>
+
+      </div>
+
+      <button
+  id="changePasswordMenu"
+  class="more-card more-menu-card"
+  type="button"
+>
+  <span>
+    비밀번호 변경
+  </span>
+
+  <strong>
+    ›
+  </strong>
+</button>
+
+    </section>
+
+<!-- 비밀번호 변경 팝업 -->
+<div id="changePasswordModal" class="running-modal hidden">
+
+  <div class="running-popup">
+
+    <div class="running-popup-head">
+      <strong>비밀번호 변경</strong>
+      <button id="changePasswordClose" type="button">×</button>
+    </div>
+
+    <div class="change-password-form">
+
+      <input
+        id="currentPassword"
+        type="password"
+        autocomplete="current-password"
+        placeholder="현재 비밀번호"
+      >
+
+      <input
+        id="newPassword"
+        type="password"
+        autocomplete="new-password"
+        placeholder="새 비밀번호"
+      >
+
+      <input
+        id="newPasswordConfirm"
+        type="password"
+        autocomplete="new-password"
+        placeholder="새 비밀번호 확인"
+      >
+
+      <button
+        id="changePasswordBtn"
+        type="button"
+      >
+        비밀번호 변경
+      </button>
+
+      <div id="changePasswordMsg"></div>
+
+    </div>
+
+  </div>
+
+</div>
+    
+  </main>
+
+
+
+  <!-- =======================================================
+       BOTTOM NAV
+  ======================================================== -->
+
+  <nav id="bottomNav">
+
+    <button
+      class="active"
+      data-page="control"
+    >
+
+      <span>
+        ⌂
+      </span>
+
+      관제
+
+    </button>
+
+
+    <button
+      data-page="detail"
+    >
+
+      <span>
+        ▤
+      </span>
+
+      상세정보
+
+    </button>
+
+
+    <button
+      data-page="ranking"
+    >
+
+      <span>
+        ♛
+      </span>
+
+      랭킹
+
+    </button>
+
+
+    <button
+      data-page="more"
+    >
+
+      <span>
+        ☰
+      </span>
+
+      더보기
+
+    </button>
+
+  </nav>
+
+
+</section>
+
+
+
+<script src="/app.js"></script>
+
+</body>
+</html>

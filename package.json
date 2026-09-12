@@ -1,16 +1,15 @@
 {
-  "name": "baemin-render-direct-test",
-  "version": "1.0.0",
+  "name": "rider-control-multicenter-v3",
+  "version": "3.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.16.3"
+  },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "express": "^5.1.0",
-    "set-cookie-parser": "^2.7.1"
   }
 }

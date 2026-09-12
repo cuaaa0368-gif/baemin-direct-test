@@ -1,25 +1,26 @@
-# Baemin Render Direct Test
+# Nurion Rider Control DEV + Baemin Direct Collector
 
-목적: 브라우저/Tampermonkey 밖의 Render 서버가 현재 인증 세션으로
-배민 관제 API를 직접 호출할 수 있는지 검증하는 최소 테스트 서비스.
+사용자가 제공한 `rider-control-dev` 전체를 기준으로, 기존 라이더 앱/UI/API는 유지하고 **배민 관제 수집 주체만 Tampermonkey에서 Render 서버 직접수집으로 추가 전환한 테스트 통합본**입니다.
 
-## 필요한 Render 환경변수
+## 기존 앱 보존
+- `public/` 폴더는 DEV 원본과 동일합니다.
+- 기존 `/api/login`, `/api/center`, 랭킹, 상세정보, 거절률, 서초대장, 비밀번호 변경 API는 그대로 유지됩니다.
+- 기존 `/api/ingest*`도 그대로 유지되어 Tampermonkey 방식과 호환됩니다.
 
-- BAEMIN_CENTER_ID
-- BAEMIN_COOKIE
-- BAEMIN_POLL_MS (기본 20000)
+## 새 직접수집
+`baemin-direct.js`가 다음 API를 Render에서 직접 호출합니다.
+- `/v2/center`
+- `/v4/management/delivery-status`
+- `/v4/management/rider-delivery-status`
 
-중요: BAEMIN_COOKIE 값은 ChatGPT/메신저/깃허브에 올리지 말고
-Render Dashboard > Environment 에 직접 입력하세요.
+필수 Render 환경변수:
+- `BAEMIN_CENTER_ID`
+- `BAEMIN_COOKIE`
+- `BAEMIN_POLL_MS` (현재 테스트값 20000 사용 가능)
 
-## 테스트 엔드포인트
+기존 rider-control DB까지 그대로 사용하려면 기존 서비스의 다음 환경변수도 복사합니다.
+- `DATABASE_URL`
+- `INGEST_KEY`
+- `LOGIN_SECRET`
 
-- /health
-- /test
-- /center
-
-성공 기준:
-- /center => status 200
-- /test => status 200
-
-401/403이면 현재 쿠키 세트가 부족하거나 만료된 상태입니다.
+자세한 내용은 `README_DIRECT_MIGRATION.txt` 참고.
