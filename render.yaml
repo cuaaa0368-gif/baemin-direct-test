@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: baemin-render-direct-test
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BAEMIN_CENTER_ID
+        sync: false
+      - key: BAEMIN_COOKIE
+        sync: false
+      - key: BAEMIN_POLL_MS
+        value: "20000"
