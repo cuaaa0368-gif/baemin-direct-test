@@ -3377,6 +3377,17 @@ function bindHorizontalSubTabSwipe(element, getModes, getCurrentMode, activateMo
       tracking = false;
       return;
     }
+
+    // Native horizontal-scroll areas (e.g. the daily hourly bar chart)
+    // own the gesture. Never use those drags for sub-tab navigation.
+    const scrollArea = event.target instanceof Element
+      ? event.target.closest('.daily-hourly-chart, [data-native-horizontal-scroll="1"]')
+      : null;
+    if (scrollArea) {
+      tracking = false;
+      return;
+    }
+
     const touch = event.touches[0];
     startX = touch.clientX;
     startY = touch.clientY;
