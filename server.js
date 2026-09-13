@@ -4,7 +4,8 @@ const crypto = require("crypto");
 const { Pool } = require("pg");
 const {
   startBaeminDirectCollector,
-  getBaeminDirectStatus
+  getBaeminDirectStatus,
+  __test: baeminDirectTest
 } = require("./baemin-direct");
 const { fork } = require("child_process");
 
@@ -52,6 +53,8 @@ function startExtraCenterCollectors() {
       name: center.name,
       centerId: center.centerId,
       pid: child.pid,
+      child,
+      pendingHistoryFinish: null,
       status: { starting: true }
     };
     extraCenterWorkers.set(center.key, entry);
@@ -59,6 +62,11 @@ function startExtraCenterCollectors() {
     child.on("message", msg => {
       if (msg?.type === "status") entry.status = msg.status;
       if (msg?.type === "error") entry.status = { error: msg.message };
+      if (msg?.type === "history-sync-result" && entry.pendingHistoryFinish) {
+        const done = entry.pendingHistoryFinish;
+        entry.pendingHistoryFinish = null;
+        done(Boolean(msg.ok), msg.message || "");
+      }
     });
     child.on("exit", (code, signal) => {
       entry.status = { stopped: true, code, signal };
@@ -106,6 +114,56 @@ const LOGIN_SECRET = process.env.LOGIN_SECRET || INGEST_KEY;
 const centers = new Map();
 const rejectCenters = new Map();
 const historyCenters = new Map();
+
+// 지사별 90일 데이터: 매일 최초 접속 시 최대 1회만 즉시 갱신한다.
+// 10:00 정기 갱신은 baemin-direct.js에서 별도로 계속 유지된다.
+const firstAccessHistoryRunning = new Set();
+
+function calendarDateKeyKst(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(now);
+}
+
+function historyLoadedToday(centerKey) {
+  const receivedAt = historyCenters.get(String(centerKey || ""))?.receivedAt;
+  if (!receivedAt) return false;
+  return calendarDateKeyKst(new Date(receivedAt)) === calendarDateKeyKst();
+}
+
+function triggerFirstAccessHistory(centerKey) {
+  const key = String(centerKey || "").trim();
+  if (!key || historyLoadedToday(key) || firstAccessHistoryRunning.has(key)) return;
+
+  firstAccessHistoryRunning.add(key);
+  console.log(`[90DAY FIRST ACCESS] START center=${key}`);
+
+  const finish = (ok, message = "") => {
+    firstAccessHistoryRunning.delete(key);
+    console.log(`[90DAY FIRST ACCESS] ${ok ? "DONE" : "FAIL"} center=${key}${message ? ` ${message}` : ""}`);
+  };
+
+  const extra = extraCenterWorkers.get(key);
+  if (extra?.child?.connected) {
+    extra.pendingHistoryFinish = finish;
+    extra.child.send({ type: "sync-history" });
+    return;
+  }
+
+  const primaryKey = String(process.env.BAEMIN_CENTER_KEY || "seocho").trim() || "seocho";
+  if (key === primaryKey) {
+    Promise.resolve(baeminDirectTest.syncHistory())
+      .then(() => {
+        const ok = historyLoadedToday(key);
+        finish(ok, ok ? "" : "no successful history ingest");
+      })
+      .catch(err => finish(false, err.message));
+    return;
+  }
+
+  finish(false, "collector not found");
+}
+
 const dailyDetailCenters = new Map();
 
 
@@ -2201,6 +2259,10 @@ app.post(
 
     }
 
+
+    // 같은 지사의 첫 사용자가 로그인하면 그날 90일 데이터가 아직 없을 때만
+    // 백그라운드에서 1회 갱신한다. 로그인 응답 자체는 기다리지 않는다.
+    triggerFirstAccessHistory(account.centerKey);
 
     const t =
       makeToken(account);
