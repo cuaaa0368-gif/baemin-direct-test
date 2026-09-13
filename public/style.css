@@ -561,6 +561,7 @@ header{flex:0 0 auto;}
   font-weight:900;
   line-height:1.3;
   text-align:right;
+  white-space:nowrap;
 }
 
 .reject-guide b{
@@ -2295,3 +2296,15 @@ nav button.active{
 .custom-period-fields.single{grid-template-columns:1fr}
 .custom-period-fields.single label{width:100%}
 .daily-single-picker{max-width:360px}
+
+/* 전체 앱 스크롤바 숨김 - 스크롤 기능은 유지 */
+*{
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+
+*::-webkit-scrollbar{
+  width:0;
+  height:0;
+  display:none;
+}
