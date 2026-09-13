@@ -11,6 +11,14 @@ let myToday = null;
 let myTodayBusinessKey = "";
 
 let rankingMode = "champions";
+
+// 기록보관소는 지사별 마지막 정상값을 보존한다.
+// DB 응답 지연/실패 때문에 정상 기록이 "-"로 퇴행하거나 탭 전환이 멈추지 않게 한다.
+const championsCache = new Map();
+const championsFetchedAt = new Map();
+const championsInFlight = new Map();
+const CHAMPIONS_REFRESH_MS = 30_000;
+
 let operationalState = null;
 let pendingDayBasis = null;
 
@@ -720,6 +728,43 @@ function escapeHtml(value) {
    RANKING TAB 생성
 ========================================================= */
 
+async function refreshChampionsInBackground({ force = false } = {}) {
+  const centerKey = String(user?.centerKey || "").trim();
+  if (!centerKey) return;
+
+  const now = Date.now();
+  const last = championsFetchedAt.get(centerKey) || 0;
+  if (!force && now - last < CHAMPIONS_REFRESH_MS) return;
+
+  // 같은 지사의 중복 DB 조회를 하나로 합친다.
+  if (championsInFlight.has(centerKey)) return championsInFlight.get(centerKey);
+
+  const request = (async () => {
+    try {
+      const result = await api("/api/champions");
+      const next = result?.data;
+      if (!next || typeof next !== "object") return;
+
+      championsCache.set(centerKey, next);
+      championsFetchedAt.set(centerKey, Date.now());
+
+      // 요청 도중 마스터가 다른 지사로 이동했다면 현재 화면을 건드리지 않는다.
+      if (String(user?.centerKey || "") !== centerKey) return;
+
+      if (data) data.champions = next;
+      if (rankingMode === "champions") renderRanking(data || { champions: next });
+    } catch (e) {
+      // 실패 시 마지막 정상 기록을 그대로 유지한다.
+      console.warn("기록보관소 백그라운드 조회:", e);
+    } finally {
+      championsInFlight.delete(centerKey);
+    }
+  })();
+
+  championsInFlight.set(centerKey, request);
+  return request;
+}
+
 function ensureRankingTabs() {
 
   const page =
@@ -876,13 +921,13 @@ function ensureRankingTabs() {
   "champions"
 ) {
 
-  result =
-    await api(
-      "/api/champions"
-    );
-
-  data.champions =
-    result.data || null;
+  // 탭은 DB를 기다리지 않고 즉시 연다.
+  const centerKey = String(user?.centerKey || "");
+  const cached = championsCache.get(centerKey);
+  if (cached && data) data.champions = cached;
+  renderRanking(data || {});
+  refreshChampionsInBackground({ force: true });
+  return;
 
 }
 
@@ -2477,29 +2522,17 @@ data.eveningRanking = [];
     }
 
          /* =====================================================
-       서초대장 조회
+       기록보관소 조회
+       - 지사별 마지막 정상값은 즉시 사용
+       - DB 확인은 백그라운드에서 수행
+       - 실패/지연 시 정상값을 null 또는 "-"로 덮지 않음
     ===================================================== */
 
-    try {
-
-      const result =
-        await api(
-          "/api/champions"
-        );
-
-      data.champions =
-        result.data || null;
-
-    } catch (e) {
-
-      console.warn(
-        "서초대장 조회:",
-        e
-      );
-
-      data.champions =
-        null;
-
+    {
+      const centerKey = String(user?.centerKey || "");
+      const cached = championsCache.get(centerKey);
+      if (cached) data.champions = cached;
+      refreshChampionsInBackground();
     }
 
     /* =====================================================

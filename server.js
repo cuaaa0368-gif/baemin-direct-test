@@ -1965,6 +1965,11 @@ app.get(
   }
 );
 
+// 기록보관소는 역대 최고기록이라 매 사용자/매 새로고침마다 DB를 다시 읽을 필요가 없다.
+// 지사별 마지막 정상 응답을 짧게 캐시해 다지사/다중 사용자 환경의 DB 부하를 줄인다.
+const championsResponseCache = new Map();
+const CHAMPIONS_CACHE_MS = 30_000;
+
 /* =========================================================
    서초대장 - 역대 기록 조회
 ========================================================= */
@@ -1979,8 +1984,17 @@ app.get(
       const centerKey =
         req.account.centerKey;
 
+      const now = Date.now();
+      const cached = championsResponseCache.get(centerKey);
+      if (cached && now - cached.at < CHAMPIONS_CACHE_MS) {
+        return res.json({ ok: true, data: cached.data });
+      }
+
       const champions =
         await getSeochoChampions(centerKey);
+
+      // 정상 조회에 성공했을 때만 캐시를 교체한다.
+      championsResponseCache.set(centerKey, { at: now, data: champions });
 
       res.json({
         ok: true,
