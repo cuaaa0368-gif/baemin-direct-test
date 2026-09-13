@@ -3358,3 +3358,73 @@ if (
     );
 
 }
+/* =========================================================
+   DETAIL / RANKING SUB-TAB SWIPE
+   - horizontal swipe only
+   - vertical scroll remains untouched
+========================================================= */
+
+function bindHorizontalSubTabSwipe(element, getModes, getCurrentMode, activateMode) {
+  if (!element || element.dataset.subTabSwipeBound === "1") return;
+  element.dataset.subTabSwipeBound = "1";
+
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+
+  element.addEventListener("touchstart", event => {
+    if (event.touches.length !== 1) {
+      tracking = false;
+      return;
+    }
+    const touch = event.touches[0];
+    startX = touch.clientX;
+    startY = touch.clientY;
+    tracking = true;
+  }, { passive: true });
+
+  element.addEventListener("touchend", event => {
+    if (!tracking || event.changedTouches.length !== 1) return;
+    tracking = false;
+
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+
+    // Accidental touches / vertical scrolling are not treated as tab swipes.
+    if (Math.abs(dx) < 55 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+
+    const modes = getModes();
+    const current = getCurrentMode();
+    const index = modes.indexOf(current);
+    if (index < 0) return;
+
+    // Swipe left -> next tab, swipe right -> previous tab. No wrap-around.
+    const nextIndex = dx < 0 ? index + 1 : index - 1;
+    if (nextIndex < 0 || nextIndex >= modes.length) return;
+
+    activateMode(modes[nextIndex]);
+  }, { passive: true });
+
+  element.addEventListener("touchcancel", () => {
+    tracking = false;
+  }, { passive: true });
+}
+
+bindHorizontalSubTabSwipe(
+  $("detailPage"),
+  () => ["weekly", "monthly", "daily", "period"],
+  () => detailMode || "weekly",
+  mode => showDetailMode(mode)
+);
+
+bindHorizontalSubTabSwipe(
+  $("rankingPage"),
+  () => ["champions", "weekly", "today", "evening"],
+  () => rankingMode || "champions",
+  mode => {
+    ensureRankingTabs();
+    const button = $("rankingTabs")?.querySelector(`[data-ranking-mode="${mode}"]`);
+    button?.click();
+  }
+);
