@@ -10,3 +10,13 @@
 - UI 조회 범위: 최근 24개월.
 - DB 적재: 기존 90일 수집 배치가 들어올 때 동일 배치를 DB 장기 이력에도 batch UPSERT한다.
 - 과거 90일보다 오래된 기존 배민 데이터는 별도 backfill 작업이 필요하다. 사용자 조회 요청이 배민 API 대량 수집을 직접 유발하지 않게 의도적으로 분리했다.
+
+
+## Phase 2 - controlled backfill
+- Target: older than recent 90 days, up to about 24 months.
+- One center processes at most 30 business dates per batch.
+- PostgreSQL table `nurion_history_backfill_state` persists cursor/progress.
+- Cursor advances only after DB batch UPSERT succeeds; restart/deploy resumes from saved cursor.
+- Existing LIVE/weekly/90-day jobs have priority; backfill skips a tick if they are running.
+- Center startup is staggered and backfill batches are spaced at least 5 minutes apart.
+- Ranking/champion queries remain center-scoped; personal history remains identity-scoped.

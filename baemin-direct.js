@@ -47,6 +47,11 @@ const HISTORY_CACHE_MS = Math.max(
 );
 const HISTORY_ON_START = String(process.env.BAEMIN_HISTORY_ON_START || "1") !== "0";
 const DIRECT_ENABLED = String(process.env.BAEMIN_DIRECT_ENABLED || "1") !== "0";
+// 장기 이력 백필: 최근 90일 운영 수집과 분리해 오래된 구간만 천천히 채운다.
+const HISTORY_BACKFILL_ENABLED = String(process.env.BAEMIN_HISTORY_BACKFILL_ENABLED || "1") !== "0";
+const HISTORY_BACKFILL_MONTHS = Math.max(12, Math.min(24, Number(process.env.BAEMIN_HISTORY_BACKFILL_MONTHS || 24) || 24));
+const HISTORY_BACKFILL_BATCH_DAYS = Math.max(1, Math.min(5, Number(process.env.BAEMIN_HISTORY_BACKFILL_BATCH_DAYS || 5) || 5));
+const HISTORY_BACKFILL_INTERVAL_MS = Math.max(5 * 60_000, Number(process.env.BAEMIN_HISTORY_BACKFILL_INTERVAL_MS || 5 * 60_000) || 5 * 60_000);
 
 const USER_AGENT =
   process.env.BAEMIN_USER_AGENT ||
@@ -79,7 +84,8 @@ const state = {
     liveSyncs: 0,
     weeklySyncs: 0,
     rejectSyncs: 0,
-    historySyncs: 0
+    historySyncs: 0,
+    historyBackfillBatches: 0
   }
 };
 
@@ -89,6 +95,8 @@ let started = false;
 let liveRunning = false;
 let weeklyRunning = false;
 let historyRunning = false;
+let historyBackfillRunning = false;
+let historyBackfillComplete = false;
 let lastLiveSnapshot = null;
 let lastLiveSnapshotAt = 0;
 
@@ -558,6 +566,14 @@ async function postInternal(route, payload) {
 
   return response;
 }
+
+async function postInternalJson(route, payload = {}) {
+  const response = await postInternal(route, payload);
+  return response.json();
+}
+
+const waitMs = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 
 function buildLivePayload(snapshot) {
   const { list, total } = snapshot;
@@ -1181,6 +1197,68 @@ async function syncHistory() {
   }
 }
 
+async function syncHistoryBackfillBatch() {
+  if (!HISTORY_BACKFILL_ENABLED || historyBackfillComplete || !state.enabled) return;
+  // 실시간/주간/90일 작업과 겹치면 운영 수집을 우선한다.
+  if (historyBackfillRunning || historyRunning || weeklyRunning || liveRunning) return;
+  historyBackfillRunning = true;
+  try {
+    const plan = await postInternalJson(
+      `/api/history-backfill-plan/${encodeURIComponent(CENTER_KEY)}`,
+      { months: HISTORY_BACKFILL_MONTHS, batchDays: HISTORY_BACKFILL_BATCH_DAYS }
+    );
+    if (plan.busy) return;
+    if (plan.done) {
+      historyBackfillComplete = true;
+      console.log(`[HISTORY BACKFILL] DONE center=${CENTER_KEY} target=${plan.targetFrom || ""}~${plan.targetTo || ""}`);
+      return;
+    }
+
+    const fromDate = String(plan.fromDate || "");
+    const toDate = String(plan.toDate || "");
+    const days = dateKeysBetween(fromDate, toDate);
+    const rows = [];
+    console.log(`[HISTORY BACKFILL] START center=${CENTER_KEY} ${fromDate}~${toDate} days=${days.length}`);
+
+    for (let i = 0; i < days.length; i++) {
+      const businessDate = days[i];
+      // 백필 도중 30초 운영 작업이 시작되면 다음 날짜 호출 전에 양보한다.
+      while (weeklyRunning || liveRunning || historyRunning) await waitMs(750);
+      const map = await fetchDateMap(businessDate);
+      map.forEach(r => rows.push(historyRow(businessDate, r)));
+      // 배민 API와 기존 30초 운영 루프에 부담을 주지 않도록 날짜 호출 사이를 띄운다.
+      if (i < days.length - 1) await waitMs(250);
+    }
+
+    const saved = await postInternalJson(
+      `/api/ingest-history-backfill/${encodeURIComponent(CENTER_KEY)}`,
+      { centerKey: CENTER_KEY, centerName: CENTER_NAME, fromDate, toDate, dayCount: days.length, rows, generatedAt: new Date().toISOString() }
+    );
+    state.counters.historyBackfillBatches++;
+    state.lastHistoryBackfill = { at: new Date().toISOString(), ok: true, fromDate, toDate, days: days.length, rows: rows.length, remainingDays: saved.remainingDays };
+    console.log(`[HISTORY BACKFILL] SAVED center=${CENTER_KEY} ${fromDate}~${toDate} days=${days.length} rows=${rows.length} remaining=${saved.remainingDays ?? "?"}`);
+    if (saved.done) historyBackfillComplete = true;
+  } catch (error) {
+    state.lastHistoryBackfill = summarizeError(error);
+    console.error(`[HISTORY BACKFILL] FAIL center=${CENTER_KEY}`, error.message);
+  } finally {
+    historyBackfillRunning = false;
+  }
+}
+
+function scheduleHistoryBackfill() {
+  if (!HISTORY_BACKFILL_ENABLED) return;
+  // 지사별 시작 시점을 결정적으로 분산한다. 재배포 직후 90일 startup sync가 먼저 끝날 시간을 준다.
+  const spread = Array.from(CENTER_KEY).reduce((n, ch) => (n + ch.charCodeAt(0)) % 120, 0) * 1000;
+  const firstDelay = 3 * 60_000 + spread;
+  setTimeout(() => {
+    syncHistoryBackfillBatch().catch(error => console.error('[HISTORY BACKFILL STARTUP]', error.message));
+    setInterval(() => {
+      syncHistoryBackfillBatch().catch(error => console.error('[HISTORY BACKFILL TIMER]', error.message));
+    }, HISTORY_BACKFILL_INTERVAL_MS);
+  }, firstDelay);
+}
+
 function msUntilNextKstHour(hour) {
   const now = Date.now();
   const p = kstParts(new Date(now));
@@ -1274,6 +1352,7 @@ async function startBaeminDirectCollector({ port, ingestKey }) {
   }, CENTER_CHECK_MS);
 
   scheduleDailyHistory();
+  scheduleHistoryBackfill();
   return getBaeminDirectStatus();
 }
 
@@ -1289,6 +1368,7 @@ module.exports = {
     syncLive,
     syncWeeklyReject,
     syncHistory,
+    syncHistoryBackfillBatch,
     checkCenter,
     getBusinessDateKey,
     startOfWednesdayKey,

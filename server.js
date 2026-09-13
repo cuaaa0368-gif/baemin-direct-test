@@ -167,6 +167,19 @@ const historyArchiveReady = (async () => {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_rider_identity_alias_user ON rider_identity_aliases (rider_user_id)`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS nurion_history_backfill_state (
+      center_key TEXT PRIMARY KEY,
+      target_from DATE NOT NULL,
+      target_to DATE NOT NULL,
+      next_to DATE,
+      completed BOOLEAN NOT NULL DEFAULT FALSE,
+      batches_completed INTEGER NOT NULL DEFAULT 0,
+      rows_saved BIGINT NOT NULL DEFAULT 0,
+      last_error TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
   console.log('[HISTORY DB] archive tables ready');
 })().catch(err => {
   console.error('[HISTORY DB INIT FAILED]', err.message);
@@ -426,6 +439,20 @@ function businessDateKeyKst(now = new Date()) {
   const d = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00Z`);
   if (Number(parts.hour) < 6) d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
+}
+
+function addDaysKeyServer(dateKey, delta) {
+  const d = new Date(`${dateKey}T00:00:00Z`);
+  if (!Number.isFinite(d.getTime())) return '';
+  d.setUTCDate(d.getUTCDate() + Number(delta || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+function dateKeySpanDays(fromDate, toDate) {
+  const a = new Date(`${fromDate}T00:00:00Z`).getTime();
+  const b = new Date(`${toDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return 0;
+  return Math.floor((b - a) / 86400000) + 1;
 }
 
 function nonNegativeNumber(value) {
@@ -1311,6 +1338,101 @@ app.post(
 
   }
 );
+
+
+/* =========================================================
+   장기 이력 제어형 백필
+   - 최근 90일보다 오래된 구간만 대상으로 한다.
+   - 진행상태는 PostgreSQL에 저장하므로 재배포/재시작 후 이어서 진행한다.
+   - 한 번에 최대 30일만 할당하고, 성공 저장 후에만 커서를 이동한다.
+========================================================= */
+let historyBackfillLease = null; // 한 번에 한 지사만 장기 백필 API를 사용한다.
+
+app.post('/api/history-backfill-plan/:centerKey', async (req, res) => {
+  if (req.get('x-ingest-key') !== INGEST_KEY) return res.status(401).json({ ok:false });
+  const centerKey = String(req.params.centerKey || '').trim();
+  if (!centerKey) return res.status(400).json({ ok:false, message:'centerKey 필요' });
+  const months = Math.max(12, Math.min(24, Number(req.body?.months || 24) || 24));
+  const batchDays = Math.max(1, Math.min(5, Number(req.body?.batchDays || 5) || 5));
+  const now = Date.now();
+  if (historyBackfillLease && historyBackfillLease.expiresAt > now && historyBackfillLease.centerKey !== centerKey) {
+    return res.json({ ok:true, busy:true, activeCenter:historyBackfillLease.centerKey });
+  }
+  try {
+    await historyArchiveReady;
+    const today = businessDateKeyKst();
+    const targetFrom = addDaysKeyServer(today, -(months * 30 + 9)); // 24개월≈729일, 윤/월길이 차이는 충분히 포함
+    const targetTo = addDaysKeyServer(today, -90);
+    await pool.query(`
+      INSERT INTO nurion_history_backfill_state (center_key, target_from, target_to, next_to)
+      VALUES ($1,$2,$3,$3)
+      ON CONFLICT (center_key) DO UPDATE SET
+        target_from = LEAST(nurion_history_backfill_state.target_from, EXCLUDED.target_from),
+        target_to = GREATEST(nurion_history_backfill_state.target_to, EXCLUDED.target_to),
+        next_to = CASE WHEN nurion_history_backfill_state.completed THEN nurion_history_backfill_state.next_to ELSE nurion_history_backfill_state.next_to END,
+        updated_at = NOW()
+    `, [centerKey, targetFrom, targetTo]);
+    const q = await pool.query(`SELECT target_from::text, target_to::text, next_to::text, completed, batches_completed, rows_saved FROM nurion_history_backfill_state WHERE center_key=$1`, [centerKey]);
+    const st = q.rows[0];
+    if (!st || st.completed || !st.next_to || st.next_to < st.target_from) {
+      if (st && !st.completed) await pool.query(`UPDATE nurion_history_backfill_state SET completed=TRUE, updated_at=NOW() WHERE center_key=$1`, [centerKey]);
+      return res.json({ ok:true, done:true, targetFrom:st?.target_from || targetFrom, targetTo:st?.target_to || targetTo, batchesCompleted:Number(st?.batches_completed)||0, rowsSaved:Number(st?.rows_saved)||0 });
+    }
+    const toDate = st.next_to;
+    const candidateFrom = addDaysKeyServer(toDate, -(batchDays - 1));
+    const fromDate = candidateFrom < st.target_from ? st.target_from : candidateFrom;
+    // 검증된 5일 전송 단위를 사용한다. 3분 lease는 장애 시 자동 회복용이다.
+    historyBackfillLease = { centerKey, expiresAt: Date.now() + 3 * 60_000 };
+    return res.json({ ok:true, done:false, fromDate, toDate, targetFrom:st.target_from, targetTo:st.target_to, batchDays });
+  } catch (err) {
+    console.error('[HISTORY BACKFILL PLAN FAILED]', centerKey, err.message);
+    return res.status(503).json({ ok:false, message:'백필 계획 생성 실패' });
+  }
+});
+
+app.post('/api/ingest-history-backfill/:centerKey', async (req, res) => {
+  if (req.get('x-ingest-key') !== INGEST_KEY) return res.status(401).json({ ok:false });
+  const centerKey = String(req.params.centerKey || '').trim();
+  const body = req.body || {};
+  const fromDate = String(body.fromDate || '');
+  const toDate = String(body.toDate || '');
+  const rows = Array.isArray(body.rows) ? body.rows : [];
+  if (!centerKey || !/^20\d{2}-\d{2}-\d{2}$/.test(fromDate) || !/^20\d{2}-\d{2}-\d{2}$/.test(toDate)) {
+    return res.status(400).json({ ok:false, message:'백필 범위 오류' });
+  }
+  try {
+    await historyArchiveReady;
+    const lock = await pool.query(`SELECT target_from::text, next_to::text, completed FROM nurion_history_backfill_state WHERE center_key=$1`, [centerKey]);
+    const st = lock.rows[0];
+    if (!st) return res.status(409).json({ ok:false, message:'백필 계획이 없습니다.' });
+    if (st.completed) return res.json({ ok:true, done:true, remainingDays:0 });
+    // 계획된 현재 커서와 다른 오래된/중복 요청은 저장은 허용하되 커서는 함부로 이동하지 않는다.
+    const dbOk = await saveHistoryArchiveToDB(centerKey, rows);
+    if (!dbOk) throw new Error('history archive batch save failed');
+    if (String(st.next_to) === toDate) {
+      const nextTo = addDaysKeyServer(fromDate, -1);
+      const done = nextTo < String(st.target_from);
+      await pool.query(`
+        UPDATE nurion_history_backfill_state
+        SET next_to=$2, completed=$3, batches_completed=batches_completed+1,
+            rows_saved=rows_saved+$4, last_error=NULL, updated_at=NOW()
+        WHERE center_key=$1
+      `, [centerKey, nextTo, done, rows.length]);
+      const remainingDays = done ? 0 : dateKeySpanDays(String(st.target_from), nextTo);
+      if (historyBackfillLease?.centerKey === centerKey) historyBackfillLease = null;
+      console.log(`[HISTORY BACKFILL DB] ${centerKey} ${fromDate}~${toDate} rows=${rows.length} remaining=${remainingDays}`);
+      return res.json({ ok:true, done, remainingDays, rowCount:rows.length });
+    }
+    if (historyBackfillLease?.centerKey === centerKey) historyBackfillLease = null;
+    console.log(`[HISTORY BACKFILL DUPLICATE] ${centerKey} ${fromDate}~${toDate} rows=${rows.length}`);
+    return res.json({ ok:true, done:false, duplicate:true, rowCount:rows.length });
+  } catch (err) {
+    if (historyBackfillLease?.centerKey === centerKey) historyBackfillLease = null;
+    console.error('[HISTORY BACKFILL SAVE FAILED]', centerKey, err.message);
+    await pool.query(`UPDATE nurion_history_backfill_state SET last_error=$2, updated_at=NOW() WHERE center_key=$1`, [centerKey, String(err.message || err)]).catch(()=>{});
+    return res.status(503).json({ ok:false, message:'백필 저장 실패' });
+  }
+});
 
 /* =========================================================
    누리온 90일 데이터 수신
