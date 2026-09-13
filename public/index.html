@@ -695,7 +695,7 @@
       <div class="page-head detail-page-head">
         <div class="page-head-copy">
           <h2>상세정보</h2>
-          <div class="page-head-meta"><small>나의 배달 실적</small></div>
+          <div class="page-head-meta"><small>나의 배달 실적</small><small class="history-retention-note">최근 90일 기록을 보관합니다</small></div>
         </div>
       </div>
 
@@ -758,8 +758,6 @@
       <div id="dailyDetailView" class="detail-view hidden">
         <div id="dailyDataState" class="detail-data-state hidden" role="status"></div>
         <div class="detail-date-nav"><button id="dailyPrev" type="button" aria-label="이전 날짜">‹</button><strong id="dailyDateTitle">-</strong><button id="dailyNext" type="button" aria-label="다음 날짜">›</button></div>
-        <div class="daily-jump-row"><button id="dailyToday" type="button">오늘</button><button id="dailyDateSearch" class="daily-date-search" type="button" aria-label="날짜 선택" title="날짜 선택"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg></button></div>
-        <div id="dailyDatePicker" class="detail-modal custom-period-modal hidden" role="dialog" aria-modal="true" aria-labelledby="dailyDatePickerTitle"><div class="custom-period-picker daily-single-picker"><div class="custom-period-head"><strong id="dailyDatePickerTitle">날짜 선택</strong><button id="dailyDatePickerClose" type="button" aria-label="닫기">×</button></div><div class="custom-period-fields single"><label><span>조회일</span><input id="dailyDateInput" type="date"></label></div><button id="applyDailyDate" type="button">조회</button></div></div>
         <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div><div class="detail-total-panel simple"><span>일일 합계</span><div><strong id="dailyTotal">0건</strong></div></div></section>
         <div class="detail-stat-grid daily-types"><div><span>음식</span><strong id="dailyFood">-</strong><small id="dailyFoodRate">-</small></div><div><span>B마트</span><strong id="dailyBmart">-</strong><small id="dailyBmartRate">-</small></div><div><span>스토어</span><strong id="dailyStore">-</strong><small id="dailyStoreRate">-</small></div><div><span>시간외</span><strong id="dailyOut">-</strong><small id="dailyOutRate">-</small></div></div>
         <article class="detail-card chart-card"><h3>시간대별 배달 건수</h3><div id="dailyHourlyChart" class="daily-hourly-chart"></div><p id="dailyHourlyNote" class="detail-data-note hidden"></p></article>

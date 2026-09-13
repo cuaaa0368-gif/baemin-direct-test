@@ -1625,7 +1625,7 @@ function rowParts(row) {
   const food = rowNumber(source, ["food", "foodComplete", "food_complete", "foodCount"]);
   const bmart = rowNumber(source, ["bmart", "bMart", "bmartComplete", "bmart_complete", "bmartCount"]);
   const store = rowNumber(source, ["store", "storeComplete", "store_complete", "storeCount"]);
-  const out = Math.max(0, rowNumber(source, ["out", "outComplete", "slaOutComplete", "sla_out_complete", "outside", "outCount"]));
+  const out = rowNumber(source, ["out", "outComplete", "slaOutComplete", "sla_out_complete", "outside", "outCount"]);
   const explicitTotal = rowNumber(source, ["total", "totalComplete", "total_complete", "complete", "completeCount", "deliveryCount", "count", "allDayComplete"]);
   // 상세정보의 총합은 항상 시간외까지 포함한다. 유형 데이터가 있으면 유형 합계를 기준으로 사용한다.
   const typedTotal = food + bmart + store + out;
@@ -3046,7 +3046,7 @@ function renderDailyDetail() {
     if((!Array.isArray(myToday.hourlyCompleted)||!myToday.hourlyCompleted.length) && previous.hourlyCompleted) row.hourlyCompleted=previous.hourlyCompleted;
   }
   const p=rowParts(row);
-  setText("dailyDateTitle",`${formatKoreanDate(detailDailyDate)} (${["일","월","화","수","목","금","토"][detailDailyDate.getDay()]})`); setText("dailyTotal",row?`${p.total.toLocaleString()}건`:"-");
+  setText("dailyDateTitle",formatKoreanDate(detailDailyDate)); setText("dailyTotal",row?`${p.total.toLocaleString()}건`:"-");
   setText("dailyFood",row?`${p.food.toLocaleString()}건`:"-"); setText("dailyBmart",row?`${p.bmart.toLocaleString()}건`:"-"); setText("dailyStore",row?`${p.store.toLocaleString()}건`:"-"); setText("dailyOut",row?`${p.out.toLocaleString()}건`:"-");
   setText("dailyFoodRate",row?rateText(p.food,p.total):"-"); setText("dailyBmartRate",row?rateText(p.bmart,p.total):"-"); setText("dailyStoreRate",row?rateText(p.store,p.total):"-"); setText("dailyOutRate",row?rateText(p.out,p.total):"-");
   renderHourly(row,key); renderPeaks(row,key);
@@ -3132,20 +3132,6 @@ $("weeklyPrev")?.addEventListener("click",async()=>{ detailWeekStart=addDays(det
 $("weeklyNext")?.addEventListener("click",async()=>{ detailWeekStart=addDays(detailWeekStart,7); renderMyWeekly(); await ensureHistoryRange(detailWeekStart,addDays(detailWeekStart,6)); renderMyWeekly(); });
 $("dailyPrev")?.addEventListener("click",async()=>{ detailDailyDate=addDays(detailDailyDate,-1); renderDailyDetail(); await ensureHistoryMonth(detailDailyDate); renderDailyDetail(); });
 $("dailyNext")?.addEventListener("click",async()=>{ detailDailyDate=addDays(detailDailyDate,1); renderDailyDetail(); await ensureHistoryMonth(detailDailyDate); renderDailyDetail(); });
-$("dailyToday")?.addEventListener("click",async()=>{ detailDailyDate=getBusinessDate(); renderDailyDetail(); await ensureHistoryMonth(detailDailyDate); renderDailyDetail(); });
-$("dailyDateSearch")?.addEventListener("click",()=>{
-  const input=$("dailyDateInput"), min=detailArchiveMinDate(), max=getBusinessDate();
-  if(input){ input.min=dateKey(min); input.max=dateKey(max); input.value=dateKey(detailDailyDate||max); }
-  $("dailyDatePicker")?.classList.remove("hidden");
-});
-$("dailyDatePickerClose")?.addEventListener("click",()=>$("dailyDatePicker")?.classList.add("hidden"));
-$("dailyDatePicker")?.addEventListener("click",e=>{ if(e.target===$("dailyDatePicker")) $("dailyDatePicker")?.classList.add("hidden"); });
-$("applyDailyDate")?.addEventListener("click",async()=>{
-  const picked=parseLocalDate($("dailyDateInput")?.value); if(!picked)return;
-  const min=detailArchiveMinDate(), max=getBusinessDate();
-  detailDailyDate=picked<min?new Date(min):(picked>max?new Date(max):picked);
-  $("dailyDatePicker")?.classList.add("hidden"); renderDailyDetail(); await ensureHistoryMonth(detailDailyDate); renderDailyDetail();
-});
 
 $("calendarPrev")?.addEventListener("click",()=>{ calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()-1,1); renderMonthlyCalendar(); });
 $("calendarNext")?.addEventListener("click",()=>{ calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()+1,1); renderMonthlyCalendar(); });
