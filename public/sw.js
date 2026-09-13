@@ -1,1 +1,1 @@
-const C="rc-v3";self.addEventListener("fetch",()=>{});
+const C="nurion-test-v1";self.addEventListener("fetch",()=>{});

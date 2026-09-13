@@ -1,8 +1,8 @@
 {
-  "name": "누리온 라이더 관제",
-  "short_name": "누리온",
-  "description": "누리온 라이더 관제 시스템",
-  "start_url": "/",
+  "name": "누리온-테스트",
+  "short_name": "누리온-테스트",
+  "description": "누리온 라이더 관제 테스트 버전",
+  "start_url": "/?app=nurion-test",
   "display": "standalone",
   "background_color": "#f4f7f7",
   "theme_color": "#20c997",
@@ -22,5 +22,7 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "id": "/?app=nurion-test",
+  "scope": "/"
 }
