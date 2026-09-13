@@ -1095,25 +1095,83 @@ async function syncHistory() {
   historyRunning = true;
 
   try {
-    const payload = await buildHistoryPayload();
-
-    await postInternal(
-      `/api/ingest-history/${encodeURIComponent(CENTER_KEY)}`,
-      payload
+    // Render 프록시의 요청 본문 한도를 넘지 않도록 90일 전체를 한 번에
+    // 보내지 않고 날짜 단위로 묶어 분할 전송한다.
+    const today = getBusinessDateKey();
+    const fromDate = addDaysKey(today, -89);
+    const days = dateKeysBetween(fromDate, today);
+    const HISTORY_BATCH_DAYS = Math.max(
+      1,
+      Math.min(10, Number(process.env.BAEMIN_HISTORY_BATCH_DAYS || 5) || 5)
     );
+
+    let totalRows = 0;
+    let batchRows = [];
+    let batchStartDate = null;
+    let batchNumber = 0;
+    const totalBatches = Math.ceil(days.length / HISTORY_BATCH_DAYS);
+
+    for (let i = 0; i < days.length; i++) {
+      const businessDate = days[i];
+      let map;
+
+      if (businessDate === today) {
+        map = await fetchTodayMap({ allowRecent: true });
+      } else {
+        map = await fetchDateMap(businessDate);
+      }
+
+      if (!batchStartDate) batchStartDate = businessDate;
+      map.forEach(r => batchRows.push(historyRow(businessDate, r)));
+      totalRows += map.size;
+
+      const isBatchEnd = ((i + 1) % HISTORY_BATCH_DAYS === 0) || i === days.length - 1;
+      if (!isBatchEnd) continue;
+
+      batchNumber++;
+      const finalBatch = i === days.length - 1;
+      const batchEndDate = businessDate;
+
+      await postInternal(
+        `/api/ingest-history/${encodeURIComponent(CENTER_KEY)}`,
+        {
+          centerKey: CENTER_KEY,
+          centerName: CENTER_NAME,
+          // 전체 90일 창을 보내야 서버가 기존 메모리에서 창 밖 데이터만 제거한다.
+          fromDate,
+          toDate: today,
+          dayCount: days.length,
+          rows: batchRows,
+          generatedAt: new Date().toISOString(),
+          batchNumber,
+          totalBatches,
+          batchFromDate: batchStartDate,
+          batchToDate: batchEndDate,
+          finalBatch
+        }
+      );
+
+      console.log(
+        `[BAEMIN HISTORY BATCH] ${batchNumber}/${totalBatches} ${batchStartDate}~${batchEndDate} rows=${batchRows.length}`
+      );
+
+      batchRows = [];
+      batchStartDate = null;
+    }
 
     state.counters.historySyncs++;
     state.lastHistory = {
       at: new Date().toISOString(),
       ok: true,
-      fromDate: payload.fromDate,
-      toDate: payload.toDate,
-      dayCount: payload.dayCount,
-      rows: payload.rows.length
+      fromDate,
+      toDate: today,
+      dayCount: days.length,
+      rows: totalRows,
+      batches: totalBatches
     };
 
     console.log(
-      `[BAEMIN HISTORY] OK ${payload.fromDate}~${payload.toDate} days=${payload.dayCount} rows=${payload.rows.length}`
+      `[BAEMIN HISTORY] OK ${fromDate}~${today} days=${days.length} rows=${totalRows} batches=${totalBatches}`
     );
   } catch (error) {
     state.lastHistory = summarizeError(error);

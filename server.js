@@ -109,7 +109,12 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  // Supabase Session Pooler의 연결 한도를 여러 Render 서비스가 함께 사용한다.
+  // 이 프로세스가 연결을 독점하지 않도록 작은 풀로 제한한다.
+  max: Math.max(1, Number(process.env.DB_POOL_MAX || 2) || 2),
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 10_000
 });
 
 pool.query("SELECT NOW()")
@@ -1397,10 +1402,14 @@ app.post(
       rows,
 
       generatedAt:
-        body.generatedAt || null,
+        body.generatedAt || previousHistory.generatedAt || null,
 
+      // 90일 분할 전송 중에는 "오늘 전체 로드 완료"로 표시하지 않는다.
+      // 마지막 배치가 정상 수신된 순간에만 receivedAt을 갱신한다.
       receivedAt:
-        new Date().toISOString()
+        body.finalBatch === false
+          ? (previousHistory.receivedAt || null)
+          : new Date().toISOString()
     });
 
     console.log(
