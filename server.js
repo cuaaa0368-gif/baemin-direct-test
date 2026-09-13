@@ -2868,14 +2868,15 @@ app.get(
 app.get(
   "/api/my-reject-detail",
   auth,
-  (req, res) => {
+  async (req, res) => {
 
     const account = req.account;
 
     const riderUserId =
-      String(
-        account.riderUserId || ""
-      ).trim();
+      String(account.riderUserId || "").trim();
+
+    const identityKey =
+      String(account.loginId || "").trim();
 
     if (!riderUserId) {
       return res.status(404).json({
@@ -2884,20 +2885,11 @@ app.get(
       });
     }
 
-    const rejectData =
-      rejectCenters.get(account.centerKey);
 
-    if (!rejectData) {
-      return res.status(404).json({
-        ok: false,
-        message: "주간 거절 데이터가 아직 없습니다."
-      });
-    }
-
-    const dailyRejectData =
-      Array.isArray(rejectData.dailyRejectData)
-        ? rejectData.dailyRejectData
-        : [];
+    /* =====================================================
+       관제 영업일 기준 현재 날짜
+       00:00 ~ 05:59 = 전날
+    ===================================================== */
 
     const nowKst = new Date(
       new Date().toLocaleString(
@@ -2914,8 +2906,12 @@ app.get(
       );
     }
 
-    const dow =
-      nowKst.getDay();
+
+    /* =====================================================
+       이번 주 수요일 계산
+    ===================================================== */
+
+    const dow = nowKst.getDay();
 
     const diff =
       (dow - 3 + 7) % 7;
@@ -2927,6 +2923,7 @@ app.get(
       nowKst.getDate() - diff
     );
 
+
     const formatDate = date =>
       `${date.getFullYear()}-` +
       `${String(
@@ -2936,154 +2933,211 @@ app.get(
         date.getDate()
       ).padStart(2, "0")}`;
 
+
     const weekStart =
       formatDate(weekStartDate);
 
-    const weekdayNames = [
-      "수요일",
-      "목요일",
-      "금요일",
-      "토요일",
-      "일요일",
-      "월요일",
-      "화요일"
-    ];
-
-const days = [];
-
-let complete = 0;
-let reject = 0;
-let cancel = 0;
+    const today =
+      formatDate(nowKst);
 
 
-/* Tampermonkey가 보내온 실제 날짜를 그대로 사용 */
+    try {
 
-const myDaily =
-  dailyRejectData
-    .filter(
-      r =>
-        String(r.userId || "").trim() ===
-        riderUserId
-    )
-    .sort(
-      (a, b) =>
-        String(a.date || "")
-          .localeCompare(
-            String(b.date || "")
+      await historyArchiveReady;
+
+
+      /* ===================================================
+         상세정보와 동일한 장기 날짜 이력 사용
+
+         - 지사 이동 전 기록도 identity 기준으로 연결
+         - 같은 날짜가 여러 지사에 존재하면
+           가장 완성된 기록 하나 선택
+      =================================================== */
+
+      const result =
+        await pool.query(
+          `
+          WITH ids AS (
+            SELECT $2::text AS rider_user_id
+
+            UNION
+
+            SELECT rider_user_id
+            FROM rider_identity_aliases
+            WHERE identity_key = $1
+          ),
+
+          ranked AS (
+            SELECT
+              h.*,
+
+              ROW_NUMBER() OVER (
+                PARTITION BY h.stat_date
+                ORDER BY
+                  h.total_complete DESC,
+                  h.updated_at DESC
+              ) AS rn
+
+            FROM nurion_rider_history h
+
+            WHERE
+              h.rider_user_id IN (
+                SELECT rider_user_id
+                FROM ids
+              )
+
+              AND h.stat_date >= $3::date
+              AND h.stat_date <= $4::date
           )
-    );
+
+          SELECT
+            stat_date::text AS date,
+            food_complete,
+            reject_count,
+            cancel_count
+
+          FROM ranked
+
+          WHERE rn = 1
+
+          ORDER BY stat_date ASC
+          `,
+          [
+            identityKey,
+            riderUserId,
+            weekStart,
+            today
+          ]
+        );
 
 
-const weekdayNamesFull = [
-  "일요일",
-  "월요일",
-  "화요일",
-  "수요일",
-  "목요일",
-  "금요일",
-  "토요일"
-];
+      const weekdayNamesFull = [
+        "일요일",
+        "월요일",
+        "화요일",
+        "수요일",
+        "목요일",
+        "금요일",
+        "토요일"
+      ];
 
 
-for (const row of myDaily) {
+      const days = [];
 
-  const dateStr =
-    String(row.date || "")
-      .slice(0, 10);
-
-  if (!dateStr) continue;
+      let complete = 0;
+      let reject = 0;
+      let cancel = 0;
 
 
-  const [y, m, d] =
-    dateStr
-      .split("-")
-      .map(Number);
+      for (const row of result.rows) {
+
+        const dateStr =
+          String(row.date || "")
+            .slice(0, 10);
+
+        if (!dateStr) continue;
 
 
- const weekday =
-  weekdayNamesFull[
-    new Date(
-      Date.UTC(y, m - 1, d)
-    ).getUTCDay()
-  ];
+        const [y, m, d] =
+          dateStr
+            .split("-")
+            .map(Number);
 
 
-  const dayComplete =
-    Number(row.complete) || 0;
-
-  const dayReject =
-    Number(row.reject) || 0;
-
-  const dayCancel =
-    Number(row.cancel) || 0;
-
-  const dayRejectCancel =
-    dayReject + dayCancel;
+        const weekday =
+          weekdayNamesFull[
+            new Date(
+              Date.UTC(y, m - 1, d)
+            ).getUTCDay()
+          ];
 
 
-  days.push({
+        /*
+         * 거절률은 전체 완료가 아니라
+         * 음식 완료 기준
+         */
 
-    weekday,
+        const dayComplete =
+          Number(row.food_complete) || 0;
 
-    date:
-      dateStr,
+        const dayReject =
+          Number(row.reject_count) || 0;
 
-    complete:
-      dayComplete,
+        const dayCancel =
+          Number(row.cancel_count) || 0;
 
-    reject:
-      dayReject,
-
-    cancel:
-      dayCancel,
-
-    rejectCancel:
-      dayRejectCancel
-
-  });
+        const dayRejectCancel =
+          dayReject + dayCancel;
 
 
-  complete +=
-    dayComplete;
+        days.push({
+          weekday,
+          date: dateStr,
+          complete: dayComplete,
+          reject: dayReject,
+          cancel: dayCancel,
+          rejectCancel: dayRejectCancel
+        });
 
-  reject +=
-    dayReject;
 
-  cancel +=
-    dayCancel;
-}
-
-    const rejectCancel =
-      reject + cancel;
-
-    const total =
-      complete + rejectCancel;
-
-    const rejectRate =
-      total > 0
-        ? Number(
-            (
-              rejectCancel /
-              total *
-              100
-            ).toFixed(1)
-          )
-        : 0;
-
-    res.json({
-      ok: true,
-      data: {
-        name: account.name,
-        userId: riderUserId,
-        complete,
-        reject,
-        cancel,
-        rejectCancel,
-        rejectRate,
-        weekStart,
-        days
+        complete += dayComplete;
+        reject += dayReject;
+        cancel += dayCancel;
       }
-    });
+
+
+      const rejectCancel =
+        reject + cancel;
+
+      const total =
+        complete + rejectCancel;
+
+      const rejectRate =
+        total > 0
+          ? Number(
+              (
+                rejectCancel /
+                total *
+                100
+              ).toFixed(1)
+            )
+          : 0;
+
+
+      res.json({
+        ok: true,
+
+        data: {
+          name: account.name,
+          userId: riderUserId,
+
+          complete,
+          reject,
+          cancel,
+          rejectCancel,
+          rejectRate,
+
+          weekStart,
+          days
+        }
+      });
+
+
+    } catch (err) {
+
+      console.error(
+        "[MY REJECT DETAIL QUERY FAILED]",
+        identityKey,
+        riderUserId,
+        err.message
+      );
+
+      res.status(503).json({
+        ok: false,
+        message: "주간 거절 이력 조회에 실패했습니다."
+      });
+
+    }
 
   }
 );
