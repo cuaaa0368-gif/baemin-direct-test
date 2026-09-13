@@ -491,360 +491,132 @@ function mergeHistoryRows(previousRows, incomingRows, fromDate, toDate) {
    Supabase - 라이더 날짜별 실적 저장
 ========================================================= */
 
+// DB 기록 저장은 30초 수집 주기마다 발생한다.
+// 기존 구현은 라이더/날짜마다 pool.query()를 반복해 한 번의 수집에서 수백 개 쿼리가
+// 동시에 다음 지사 수집과 겹칠 수 있었다. 아래 저장 함수들은 수집 1회당 SQL 1회로 묶는다.
+
 async function saveWeeklyDetailsToDB(centerKey, weekStart, weeklyDetails) {
   try {
     console.log("[DB WEEKLY INPUT] weekStart:", weekStart);
-    if (!Array.isArray(weeklyDetails) || weeklyDetails.length === 0) {
-      return;
-    }
+    if (!Array.isArray(weeklyDetails) || weeklyDetails.length === 0) return;
 
-    const weekdayOffset = {
-      "수요일": 0,
-      "목요일": 1,
-      "금요일": 2,
-      "토요일": 3,
-      "일요일": 4,
-      "월요일": 5,
-      "화요일": 6
-    };
-
+    const weekdayOffset = { "수요일":0, "목요일":1, "금요일":2, "토요일":3, "일요일":4, "월요일":5, "화요일":6 };
+    const rows = [];
     for (const rider of weeklyDetails) {
       const userId = String(rider.userId || "").trim();
-
       if (!userId) continue;
-
       const name = String(rider.name || "").trim();
-      const days = rider.days || {};
-
-      for (const [weekday, complete] of Object.entries(days)) {
+      for (const [weekday, complete] of Object.entries(rider.days || {})) {
         if (weekdayOffset[weekday] === undefined) continue;
-
         const date = new Date(`${weekStart}T12:00:00+09:00`);
         date.setDate(date.getDate() + weekdayOffset[weekday]);
-
-        const statDate = new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Seoul",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit"
-        }).format(date);
-
-        await pool.query(
-          `
-          INSERT INTO rider_daily_stats
-            (
-              stat_date,
-              center_key,
-              rider_user_id,
-              rider_name,
-              complete,
-              reject_count,
-              cancel_count
-            )
-          VALUES ($1,$2,$3,$4,$5,0,0)
-
-          ON CONFLICT
-            (stat_date, center_key, rider_user_id)
-
-DO UPDATE SET
-  rider_name = EXCLUDED.rider_name,
-  complete = GREATEST(
-    rider_daily_stats.complete,
-    EXCLUDED.complete
-  ),
-  updated_at = now()
-          `,
-          [
-            statDate,
-            centerKey,
-            userId,
-            name,
-            Number(complete) || 0
-          ]
-        );
+        const statDate = new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Seoul", year:"numeric", month:"2-digit", day:"2-digit" }).format(date);
+        rows.push({ stat_date:statDate, center_key:centerKey, rider_user_id:userId, rider_name:name, complete:Number(complete)||0 });
       }
     }
+    if (!rows.length) return;
 
-    console.log(
-      "[DB WEEKLY SAVED]",
-      centerKey,
-      "riders:",
-      weeklyDetails.length
-    );
+    await pool.query(`
+      INSERT INTO rider_daily_stats (stat_date, center_key, rider_user_id, rider_name, complete, reject_count, cancel_count)
+      SELECT x.stat_date, x.center_key, x.rider_user_id, x.rider_name, x.complete, 0, 0
+      FROM jsonb_to_recordset($1::jsonb) AS x(stat_date date, center_key text, rider_user_id text, rider_name text, complete integer)
+      ON CONFLICT (stat_date, center_key, rider_user_id)
+      DO UPDATE SET rider_name=EXCLUDED.rider_name,
+                    complete=GREATEST(rider_daily_stats.complete, EXCLUDED.complete),
+                    updated_at=now()
+    `, [JSON.stringify(rows)]);
 
+    console.log("[DB WEEKLY SAVED]", centerKey, "riders:", weeklyDetails.length, "rows:", rows.length);
   } catch (err) {
-    console.error(
-      "[DB WEEKLY SAVE FAILED]",
-      centerKey,
-      err.message
-    );
+    console.error("[DB WEEKLY SAVE FAILED]", centerKey, err.message);
   }
 }
-
-/* =========================================================
-   Supabase - 라이더 날짜별 거절/취소 저장
-========================================================= */
 
 async function saveDailyRejectToDB(centerKey, dailyRejectData) {
   try {
-    if (!Array.isArray(dailyRejectData) || dailyRejectData.length === 0) {
-      return;
-    }
+    if (!Array.isArray(dailyRejectData) || dailyRejectData.length === 0) return;
+    const rows = dailyRejectData.map(row => ({
+      stat_date:String(row.date || ""), center_key:centerKey,
+      rider_user_id:String(row.userId || "").trim(), rider_name:String(row.name || ""),
+      food_complete:Number(row.complete)||0, reject_count:Number(row.reject)||0, cancel_count:Number(row.cancel)||0
+    })).filter(r => r.stat_date && r.rider_user_id);
+    if (!rows.length) return;
 
-    for (const row of dailyRejectData) {
-       console.log(
-    "[REJECT ROW CHECK]",
-    row.date,
-    row.name,
-    "complete:", row.complete,
-    "reject:", row.reject,
-    "cancel:", row.cancel
-  );
-      const userId = String(row.userId || "").trim();
-      if (!userId || !row.date) continue;
-
-      await pool.query(
-  `
-  INSERT INTO rider_daily_stats
-    (
-      stat_date,
-      center_key,
-      rider_user_id,
-      rider_name,
-      complete,
-      food_complete,
-      reject_count,
-      cancel_count
-    )
-  VALUES ($1,$2,$3,$4,0,$5,$6,$7)
-
-  ON CONFLICT
-    (stat_date, center_key, rider_user_id)
-
-  DO UPDATE SET
-    rider_name = EXCLUDED.rider_name,
-    food_complete = EXCLUDED.food_complete,
-    reject_count = EXCLUDED.reject_count,
-    cancel_count = EXCLUDED.cancel_count,
-    updated_at = now()
-  `,
-  [
-    row.date,
-    centerKey,
-    userId,
-    String(row.name || ""),
-    Number(row.complete) || 0,
-    Number(row.reject) || 0,
-    Number(row.cancel) || 0
-  ]
-);
- } 
-    console.log(
-      "[DB REJECT SAVED]",
-      centerKey,
-      "rows:",
-      dailyRejectData.length
-    );
-
+    await pool.query(`
+      INSERT INTO rider_daily_stats (stat_date, center_key, rider_user_id, rider_name, complete, food_complete, reject_count, cancel_count)
+      SELECT x.stat_date, x.center_key, x.rider_user_id, x.rider_name, 0, x.food_complete, x.reject_count, x.cancel_count
+      FROM jsonb_to_recordset($1::jsonb) AS x(stat_date date, center_key text, rider_user_id text, rider_name text, food_complete integer, reject_count integer, cancel_count integer)
+      ON CONFLICT (stat_date, center_key, rider_user_id)
+      DO UPDATE SET rider_name=EXCLUDED.rider_name,
+                    food_complete=EXCLUDED.food_complete,
+                    reject_count=EXCLUDED.reject_count,
+                    cancel_count=EXCLUDED.cancel_count,
+                    updated_at=now()
+    `, [JSON.stringify(rows)]);
+    console.log("[DB REJECT SAVED]", centerKey, "rows:", rows.length);
   } catch (err) {
-    console.error(
-      "[DB REJECT SAVE FAILED]",
-      centerKey,
-      err.message
-    );
+    console.error("[DB REJECT SAVE FAILED]", centerKey, err.message);
   }
 }
-
-/* =========================================================
-   Supabase - 오늘 저녁피크 실적 저장
-========================================================= */
 
 async function saveEveningToDB(centerKey, riders) {
   try {
     if (!Array.isArray(riders) || riders.length === 0) return;
+    const nowKst = new Date(new Date().toLocaleString("en-US", { timeZone:"Asia/Seoul" }));
+    if (nowKst.getHours() < 6) nowKst.setDate(nowKst.getDate() - 1);
+    const statDate = `${nowKst.getFullYear()}-${String(nowKst.getMonth()+1).padStart(2,"0")}-${String(nowKst.getDate()).padStart(2,"0")}`;
+    const rows = riders.map(rider => ({
+      stat_date:statDate, center_key:centerKey, rider_user_id:String(rider.userId||"").trim(), rider_name:String(rider.name||""),
+      complete:Number(rider.allDayComplete)||0, evening_complete:Number(rider.evening)||0
+    })).filter(r => r.rider_user_id);
+    if (!rows.length) return;
 
-// 배민 업무일 기준: 06:00 이전은 전날
-const nowKst = new Date(
-  new Date().toLocaleString("en-US", {
-    timeZone: "Asia/Seoul"
-  })
-);
-
-if (nowKst.getHours() < 6) {
-  nowKst.setDate(nowKst.getDate() - 1);
-}
-
-const statDate =
-  `${nowKst.getFullYear()}-` +
-  `${String(nowKst.getMonth() + 1).padStart(2, "0")}-` +
-  `${String(nowKst.getDate()).padStart(2, "0")}`;
-
-    for (const rider of riders) {
-      const userId = String(rider.userId || "").trim();
-      if (!userId) continue;
-
-      await pool.query(
-        `
-        INSERT INTO rider_daily_stats
-        (
-          stat_date,
-          center_key,
-          rider_user_id,
-          rider_name,
-          complete,
-          reject_count,
-          cancel_count,
-          evening_complete
-        )
-        VALUES ($1,$2,$3,$4,$5,0,0,$6)
-
-        ON CONFLICT
-          (stat_date, center_key, rider_user_id)
-
-DO UPDATE SET
-  rider_name = EXCLUDED.rider_name,
-
-  complete = GREATEST(
-    rider_daily_stats.complete,
-    EXCLUDED.complete
-  ),
-
-  evening_complete = GREATEST(
-    rider_daily_stats.evening_complete,
-    EXCLUDED.evening_complete
-  ),
-
-  updated_at = now()
-        `,
-        [
-          statDate,
-          centerKey,
-          userId,
-          String(rider.name || ""),
-          Number(rider.allDayComplete) || 0,
-          Number(rider.evening) || 0
-        ]
-      );
-    }
-
-    console.log(
-      "[DB EVENING SAVED]",
-      centerKey,
-      "riders:",
-      riders.length
-    );
-
+    await pool.query(`
+      INSERT INTO rider_daily_stats (stat_date, center_key, rider_user_id, rider_name, complete, reject_count, cancel_count, evening_complete)
+      SELECT x.stat_date, x.center_key, x.rider_user_id, x.rider_name, x.complete, 0, 0, x.evening_complete
+      FROM jsonb_to_recordset($1::jsonb) AS x(stat_date date, center_key text, rider_user_id text, rider_name text, complete integer, evening_complete integer)
+      ON CONFLICT (stat_date, center_key, rider_user_id)
+      DO UPDATE SET rider_name=EXCLUDED.rider_name,
+                    complete=GREATEST(rider_daily_stats.complete, EXCLUDED.complete),
+                    evening_complete=GREATEST(rider_daily_stats.evening_complete, EXCLUDED.evening_complete),
+                    updated_at=now()
+    `, [JSON.stringify(rows)]);
+    console.log("[DB EVENING SAVED]", centerKey, "riders:", rows.length);
   } catch (err) {
-    console.error(
-      "[DB EVENING SAVE FAILED]",
-      centerKey,
-      err.message
-    );
+    console.error("[DB EVENING SAVE FAILED]", centerKey, err.message);
   }
 }
-
-/* =========================================================
-   Supabase - 주간 실적 기록 저장
-========================================================= */
 
 async function saveWeeklyRankingToDB(centerKey, weeklyRanking) {
   try {
-    if (!Array.isArray(weeklyRanking) || weeklyRanking.length === 0) {
-      return;
-    }
+    if (!Array.isArray(weeklyRanking) || weeklyRanking.length === 0) return;
+    const nowKst = new Date(new Date().toLocaleString("en-US", { timeZone:"Asia/Seoul" }));
+    if (nowKst.getHours() < 6) nowKst.setDate(nowKst.getDate() - 1);
+    const todayStr = `${nowKst.getFullYear()}-${String(nowKst.getMonth()+1).padStart(2,"0")}-${String(nowKst.getDate()).padStart(2,"0")}`;
+    const today = new Date(todayStr + "T00:00:00Z");
+    const diff = (today.getUTCDay() - 3 + 7) % 7;
+    const weekStartDate = new Date(today); weekStartDate.setUTCDate(today.getUTCDate() - diff);
+    const weekStart = weekStartDate.toISOString().slice(0,10);
+    const rows = weeklyRanking.map(rider => ({
+      week_start:weekStart, center_key:centerKey, rider_user_id:String(rider.userId||"").trim(),
+      rider_name:String(rider.name||""), complete:Number(rider.val)||0
+    })).filter(r => r.rider_user_id);
+    if (!rows.length) return;
 
-// 배민 업무일 기준: 06:00 이전은 전날
-const nowKst = new Date(
-  new Date().toLocaleString("en-US", {
-    timeZone: "Asia/Seoul"
-  })
-);
-
-if (nowKst.getHours() < 6) {
-  nowKst.setDate(nowKst.getDate() - 1);
-}
-
-const todayStr =
-  `${nowKst.getFullYear()}-` +
-  `${String(nowKst.getMonth() + 1).padStart(2, "0")}-` +
-  `${String(nowKst.getDate()).padStart(2, "0")}`;
-
-const today = new Date(todayStr + "T00:00:00Z");
-
-    // 수요일을 한 주의 시작으로 계산
-    const dow = today.getUTCDay();
-    const diff = (dow - 3 + 7) % 7;
-
-    const weekStartDate = new Date(today);
-    weekStartDate.setUTCDate(today.getUTCDate() - diff);
-
-    const weekStart =
-      weekStartDate.toISOString().slice(0, 10);
-
-    for (const rider of weeklyRanking) {
-
-      const userId =
-        String(rider.userId || "").trim();
-
-      if (!userId) continue;
-
-      const complete =
-        Number(rider.val) || 0;
-
-      await pool.query(
-        `
-        INSERT INTO rider_weekly_records
-          (
-            week_start,
-            center_key,
-            rider_user_id,
-            rider_name,
-            complete
-          )
-
-        VALUES ($1,$2,$3,$4,$5)
-
-        ON CONFLICT
-          (week_start, center_key, rider_user_id)
-
-        DO UPDATE SET
-          rider_name = EXCLUDED.rider_name,
-          complete = GREATEST(
-            rider_weekly_records.complete,
-            EXCLUDED.complete
-          ),
-          updated_at = now()
-        `,
-        [
-          weekStart,
-          centerKey,
-          userId,
-          String(rider.name || ""),
-          complete
-        ]
-      );
-    }
-
-    console.log(
-      "[DB WEEKLY RECORD SAVED]",
-      centerKey,
-      "week:",
-      weekStart,
-      "riders:",
-      weeklyRanking.length
-    );
-
+    await pool.query(`
+      INSERT INTO rider_weekly_records (week_start, center_key, rider_user_id, rider_name, complete)
+      SELECT x.week_start, x.center_key, x.rider_user_id, x.rider_name, x.complete
+      FROM jsonb_to_recordset($1::jsonb) AS x(week_start date, center_key text, rider_user_id text, rider_name text, complete integer)
+      ON CONFLICT (week_start, center_key, rider_user_id)
+      DO UPDATE SET rider_name=EXCLUDED.rider_name,
+                    complete=GREATEST(rider_weekly_records.complete, EXCLUDED.complete),
+                    updated_at=now()
+    `, [JSON.stringify(rows)]);
+    console.log("[DB WEEKLY RECORD SAVED]", centerKey, "week:", weekStart, "riders:", rows.length);
   } catch (err) {
-
-    console.error(
-      "[DB WEEKLY RECORD SAVE FAILED]",
-      centerKey,
-      err.message
-    );
-
+    console.error("[DB WEEKLY RECORD SAVE FAILED]", centerKey, err.message);
   }
 }
-
 
 /* =========================================================
    서초대장 - 역대 기록 계산
