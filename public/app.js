@@ -385,7 +385,7 @@ function rejectGuide(
       );
 
 
-    return `${need}건 완료 필요`;
+    return `${need}건 완료필요`;
 
   }
 
@@ -402,7 +402,7 @@ function rejectGuide(
   return `${Math.max(
     0,
     allow
-  )}건 거절 가능`;
+  )}건 거절가능`;
 
 }
 
