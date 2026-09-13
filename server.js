@@ -123,6 +123,56 @@ pool.query("SELECT NOW()")
 
 const app = express();
 
+// =========================================================
+// 장기 개인 이력 저장소 (상용 구조)
+// - 최근 90일 메모리 캐시와 별개로 DB를 영구 기준으로 사용한다.
+// - center_key는 당시 소속을 보존하고, 개인 조회는 identity 기준으로 지사 경계를 넘는다.
+// =========================================================
+const historyArchiveReady = (async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS nurion_rider_history (
+      stat_date DATE NOT NULL,
+      center_key TEXT NOT NULL,
+      rider_user_id TEXT NOT NULL,
+      rider_name TEXT,
+      total_complete INTEGER NOT NULL DEFAULT 0,
+      food_complete INTEGER NOT NULL DEFAULT 0,
+      bmart_complete INTEGER NOT NULL DEFAULT 0,
+      store_complete INTEGER NOT NULL DEFAULT 0,
+      out_complete INTEGER NOT NULL DEFAULT 0,
+      morning_complete INTEGER NOT NULL DEFAULT 0,
+      afternoon_complete INTEGER NOT NULL DEFAULT 0,
+      evening_complete INTEGER NOT NULL DEFAULT 0,
+      midnight_complete INTEGER NOT NULL DEFAULT 0,
+      reject_count INTEGER NOT NULL DEFAULT 0,
+      cancel_count INTEGER NOT NULL DEFAULT 0,
+      rider_fault_count INTEGER NOT NULL DEFAULT 0,
+      hourly_completed JSONB NOT NULL DEFAULT '[]'::jsonb,
+      raw_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (stat_date, center_key, rider_user_id)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_nurion_history_rider_date ON nurion_rider_history (rider_user_id, stat_date DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_nurion_history_center_date ON nurion_rider_history (center_key, stat_date DESC)`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rider_identity_aliases (
+      identity_key TEXT NOT NULL,
+      center_key TEXT NOT NULL,
+      rider_user_id TEXT NOT NULL,
+      rider_name TEXT,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (identity_key, center_key, rider_user_id)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_rider_identity_alias_user ON rider_identity_aliases (rider_user_id)`);
+  console.log('[HISTORY DB] archive tables ready');
+})().catch(err => {
+  console.error('[HISTORY DB INIT FAILED]', err.message);
+  return false;
+});
+
 const PORT = process.env.PORT || 8787;
 const INGEST_KEY = process.env.INGEST_KEY || "change-me-later";
 
@@ -618,6 +668,93 @@ async function saveWeeklyRankingToDB(centerKey, weeklyRanking) {
   }
 }
 
+async function saveHistoryArchiveToDB(centerKey, incomingRows) {
+  if (!Array.isArray(incomingRows) || !incomingRows.length) return true;
+  try {
+    await historyArchiveReady;
+    const rows = incomingRows.map(r => {
+      const a = r?.deliveryAcceptanceCount || {};
+      const p = r?.deliveryPeakTimeCount || {};
+      const food = Number(r?.food ?? a.foodComplete) || 0;
+      const bmart = Number(r?.bmart ?? a.bmartComplete) || 0;
+      const store = Number(r?.store ?? a.storeComplete) || 0;
+      const out = Number(r?.out ?? a.slaOutComplete) || 0;
+      return {
+        stat_date: String(r?.date || ''), center_key: centerKey,
+        rider_user_id: String(r?.userId || '').trim(), rider_name: String(r?.name || ''),
+        total_complete: food + bmart + store + out, food_complete: food, bmart_complete: bmart,
+        store_complete: store, out_complete: out,
+        morning_complete: Number(r?.morning ?? p.morning) || 0,
+        afternoon_complete: Number(r?.afternoon ?? p.afternoon) || 0,
+        evening_complete: Number(r?.evening ?? p.evening) || 0,
+        midnight_complete: Number(r?.midnight ?? p.midnight) || 0,
+        reject_count: Number(r?.reject ?? r?.totalReject ?? a.totalReject) || 0,
+        cancel_count: Number(r?.cancel ?? r?.totalCancel ?? a.totalCancel) || 0,
+        rider_fault_count: Number(r?.riderFault ?? r?.totalRiderFault ?? a.totalRiderFault) || 0,
+        hourly_completed: Array.isArray(r?.hourlyCompleted) ? r.hourlyCompleted : [],
+        raw_payload: r
+      };
+    }).filter(r => /^20\d{2}-\d{2}-\d{2}$/.test(r.stat_date) && r.rider_user_id);
+    if (!rows.length) return true;
+
+    await pool.query(`
+      INSERT INTO nurion_rider_history (
+        stat_date, center_key, rider_user_id, rider_name, total_complete, food_complete, bmart_complete,
+        store_complete, out_complete, morning_complete, afternoon_complete, evening_complete, midnight_complete,
+        reject_count, cancel_count, rider_fault_count, hourly_completed, raw_payload
+      )
+      SELECT x.stat_date, x.center_key, x.rider_user_id, x.rider_name, x.total_complete, x.food_complete, x.bmart_complete,
+             x.store_complete, x.out_complete, x.morning_complete, x.afternoon_complete, x.evening_complete, x.midnight_complete,
+             x.reject_count, x.cancel_count, x.rider_fault_count, x.hourly_completed, x.raw_payload
+      FROM jsonb_to_recordset($1::jsonb) AS x(
+        stat_date date, center_key text, rider_user_id text, rider_name text, total_complete integer, food_complete integer,
+        bmart_complete integer, store_complete integer, out_complete integer, morning_complete integer, afternoon_complete integer,
+        evening_complete integer, midnight_complete integer, reject_count integer, cancel_count integer, rider_fault_count integer,
+        hourly_completed jsonb, raw_payload jsonb
+      )
+      ON CONFLICT (stat_date, center_key, rider_user_id) DO UPDATE SET
+        rider_name=EXCLUDED.rider_name,
+        total_complete=GREATEST(nurion_rider_history.total_complete, EXCLUDED.total_complete),
+        food_complete=GREATEST(nurion_rider_history.food_complete, EXCLUDED.food_complete),
+        bmart_complete=GREATEST(nurion_rider_history.bmart_complete, EXCLUDED.bmart_complete),
+        store_complete=GREATEST(nurion_rider_history.store_complete, EXCLUDED.store_complete),
+        out_complete=GREATEST(nurion_rider_history.out_complete, EXCLUDED.out_complete),
+        morning_complete=GREATEST(nurion_rider_history.morning_complete, EXCLUDED.morning_complete),
+        afternoon_complete=GREATEST(nurion_rider_history.afternoon_complete, EXCLUDED.afternoon_complete),
+        evening_complete=GREATEST(nurion_rider_history.evening_complete, EXCLUDED.evening_complete),
+        midnight_complete=GREATEST(nurion_rider_history.midnight_complete, EXCLUDED.midnight_complete),
+        reject_count=GREATEST(nurion_rider_history.reject_count, EXCLUDED.reject_count),
+        cancel_count=GREATEST(nurion_rider_history.cancel_count, EXCLUDED.cancel_count),
+        rider_fault_count=GREATEST(nurion_rider_history.rider_fault_count, EXCLUDED.rider_fault_count),
+        hourly_completed=CASE WHEN jsonb_array_length(EXCLUDED.hourly_completed) > 0 THEN EXCLUDED.hourly_completed ELSE nurion_rider_history.hourly_completed END,
+        raw_payload=EXCLUDED.raw_payload, updated_at=NOW()
+    `, [JSON.stringify(rows)]);
+    console.log('[HISTORY DB SAVED]', centerKey, 'rows:', rows.length);
+    return true;
+  } catch (err) {
+    console.error('[HISTORY DB SAVE FAILED]', centerKey, err.message);
+    return false;
+  }
+}
+
+async function rememberRiderIdentity(account) {
+  const identityKey = String(account?.loginId || '').trim();
+  const centerKey = String(account?.centerKey || '').trim();
+  const riderUserId = String(account?.riderUserId || '').trim();
+  if (!identityKey || !centerKey || !riderUserId || account?.role !== 'rider') return;
+  try {
+    await historyArchiveReady;
+    await pool.query(`
+      INSERT INTO rider_identity_aliases (identity_key, center_key, rider_user_id, rider_name)
+      VALUES ($1,$2,$3,$4)
+      ON CONFLICT (identity_key, center_key, rider_user_id) DO UPDATE SET
+        rider_name=EXCLUDED.rider_name, last_seen_at=NOW()
+    `, [identityKey, centerKey, riderUserId, String(account?.name || '')]);
+  } catch (err) {
+    console.error('[RIDER IDENTITY SAVE FAILED]', identityKey, err.message);
+  }
+}
+
 /* =========================================================
    서초대장 - 역대 기록 계산
 ========================================================= */
@@ -800,6 +937,7 @@ async function loadAccountsFromDB() {
       "[ACCOUNTS DB LOADED]",
       result.rows.length
     );
+    for (const account of accounts.values()) rememberRiderIdentity(account);
 
   } catch (err) {
     console.error(
@@ -842,6 +980,7 @@ async function saveAccountToDB(account) {
       ]
     );
 
+    rememberRiderIdentity(account);
     console.log(
       "[ACCOUNT DB SAVED]",
       account.loginId
@@ -1200,6 +1339,9 @@ app.post(
     const body = req.body || {};
 
     const incomingRows = Array.isArray(body.rows) ? body.rows : [];
+    // 메모리 캐시와 별개로 모든 정상 90일 수집 배치를 장기 DB에 누적한다.
+    // DB 실패가 실시간 메모리 수집까지 막지는 않지만 로그로 명확히 남긴다.
+    saveHistoryArchiveToDB(centerKey, incomingRows);
     const previousHistory = historyCenters.get(centerKey) || {};
     const rows = mergeHistoryRows(
       previousHistory.rows,
@@ -1497,39 +1639,86 @@ app.get(
       });
     }
 
-    const history =
-      historyCenters.get(account.centerKey);
-
-    if (!history) {
-      return res.status(404).json({
-        ok: false,
-        message: "90일 데이터가 아직 없습니다."
-      });
-    }
-
-    const rows =
-      Array.isArray(history.rows)
-        ? history.rows.filter(
-            row =>
-              String(row.userId || "").trim() ===
-              riderUserId
-          )
-        : [];
-
-    res.json({
-      ok: true,
-      data: {
-        name: account.name,
-        userId: riderUserId,
-        fromDate: history.fromDate,
-        toDate: history.toDate,
-        dayCount: history.dayCount,
-        receivedAt: history.receivedAt,
-        rows
+    // 개인 상세정보는 현재 지사에 묶지 않는다. 동일 riderUserId의 최근 이력을
+    // 모든 수집 지사에서 합쳐 지사 이동 전후가 끊기지 않게 한다.
+    const candidates = [];
+    let latestReceivedAt = null;
+    for (const history of historyCenters.values()) {
+      if (!Array.isArray(history?.rows)) continue;
+      for (const row of history.rows) {
+        if (String(row?.userId || '').trim() === riderUserId) candidates.push(row);
       }
-    });
+      if (history.receivedAt && (!latestReceivedAt || history.receivedAt > latestReceivedAt)) latestReceivedAt = history.receivedAt;
+    }
+    if (!candidates.length && !historyCenters.size) {
+      return res.status(404).json({ ok:false, message:"90일 데이터가 아직 없습니다." });
+    }
+    const byDate = new Map();
+    for (const row of candidates) {
+      const key = String(row?.date || '');
+      if (!key) continue;
+      const prev = byDate.get(key);
+      if (!prev || fourTypeTotal(row?.deliveryAcceptanceCount || row) >= fourTypeTotal(prev?.deliveryAcceptanceCount || prev)) byDate.set(key, row);
+    }
+    const rows = [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    res.json({ ok:true, data:{
+      name:account.name, userId:riderUserId,
+      fromDate:rows[0]?.date || '', toDate:rows.at(-1)?.date || '',
+      dayCount:rows.length, receivedAt:latestReceivedAt, rows
+    }});
   }
 );
+
+/* =========================================================
+   본인 장기 이력 - 월 단위 DB 조회
+   개인 identity 기준으로 지사 이동 이력을 연결한다.
+========================================================= */
+app.get('/api/my-history-month', auth, async (req, res) => {
+  const account = req.account;
+  const riderUserId = String(account.riderUserId || '').trim();
+  const identityKey = String(account.loginId || '').trim();
+  const month = String(req.query.month || '').trim();
+  if (!riderUserId) return res.status(404).json({ ok:false, message:'라이더 계정이 연결되어 있지 않습니다.' });
+  if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ ok:false, message:'month는 YYYY-MM 형식이어야 합니다.' });
+
+  const [year, mon] = month.split('-').map(Number);
+  const fromDate = `${year}-${String(mon).padStart(2,'0')}-01`;
+  const next = new Date(Date.UTC(year, mon, 1));
+  const toExclusive = next.toISOString().slice(0,10);
+  try {
+    await historyArchiveReady;
+    const result = await pool.query(`
+      WITH ids AS (
+        SELECT $2::text AS rider_user_id
+        UNION
+        SELECT rider_user_id FROM rider_identity_aliases WHERE identity_key = $1
+      ), ranked AS (
+        SELECT h.*, ROW_NUMBER() OVER (PARTITION BY h.stat_date ORDER BY h.total_complete DESC, h.updated_at DESC) AS rn
+        FROM nurion_rider_history h
+        WHERE h.rider_user_id IN (SELECT rider_user_id FROM ids)
+          AND h.stat_date >= $3::date AND h.stat_date < $4::date
+      )
+      SELECT stat_date::text AS date, center_key, rider_user_id, rider_name, total_complete,
+             food_complete, bmart_complete, store_complete, out_complete, morning_complete, afternoon_complete,
+             evening_complete, midnight_complete, reject_count, cancel_count, rider_fault_count, hourly_completed
+      FROM ranked WHERE rn=1 ORDER BY stat_date ASC
+    `, [identityKey, riderUserId, fromDate, toExclusive]);
+    const rows = result.rows.map(r => ({
+      date:r.date, centerKey:r.center_key, userId:r.rider_user_id, name:r.rider_name,
+      total:Number(r.total_complete)||0, totalComplete:Number(r.total_complete)||0,
+      food:Number(r.food_complete)||0, bmart:Number(r.bmart_complete)||0, store:Number(r.store_complete)||0, out:Number(r.out_complete)||0,
+      morning:Number(r.morning_complete)||0, afternoon:Number(r.afternoon_complete)||0, evening:Number(r.evening_complete)||0, midnight:Number(r.midnight_complete)||0,
+      reject:Number(r.reject_count)||0, cancel:Number(r.cancel_count)||0, riderFault:Number(r.rider_fault_count)||0,
+      deliveryAcceptanceCount:{ foodComplete:Number(r.food_complete)||0, bmartComplete:Number(r.bmart_complete)||0, storeComplete:Number(r.store_complete)||0, slaOutComplete:Number(r.out_complete)||0 },
+      deliveryPeakTimeCount:{ morning:Number(r.morning_complete)||0, afternoon:Number(r.afternoon_complete)||0, evening:Number(r.evening_complete)||0, midnight:Number(r.midnight_complete)||0 },
+      hourlyCompleted:Array.isArray(r.hourly_completed) ? r.hourly_completed : []
+    }));
+    res.json({ ok:true, data:{ month, rows } });
+  } catch (err) {
+    console.error('[HISTORY MONTH QUERY FAILED]', identityKey, month, err.message);
+    res.status(503).json({ ok:false, message:'과거 이력 조회에 실패했습니다.' });
+  }
+});
 
 /* =========================================================
    본인 주간 배달 실적 - 관제 기준

@@ -10,6 +10,13 @@ let myDailyDetail = null;
 let myToday = null;
 let myTodayBusinessKey = "";
 
+// 장기 상세정보는 1~2년 전체를 한꺼번에 메모리에 올리지 않는다.
+// 사용자가 실제로 본 월만 브라우저 메모리에 보관하고, 앞뒤 월은 미리 준비한다.
+const detailArchiveRowsByDate = new Map();
+const detailMonthCache = new Map();
+const detailMonthInFlight = new Map();
+const DETAIL_ARCHIVE_MONTHS = 24;
+
 let rankingMode = "champions";
 
 // 기록보관소는 지사별 마지막 정상값을 보존한다.
@@ -1495,7 +1502,10 @@ function normalizeHistoryRows(source) {
 
 function detailRows() {
   const rows = normalizeHistoryRows(myHistory);
-  const byDate = new Map(rows.map(row => [String(row.date), row]));
+  const byDate = new Map();
+  // DB 장기 캐시를 먼저 깔고 최근 90일 메모리 데이터를 덮어써 최신값을 우선한다.
+  for (const [date, row] of detailArchiveRowsByDate) byDate.set(String(date), row);
+  for (const row of rows) byDate.set(String(row.date), row);
   if (myToday) {
     const key = dateKey(getBusinessDate());
     const existing = byDate.get(key) || {};
@@ -1505,6 +1515,61 @@ function detailRows() {
     byDate.set(key, merged);
   }
   return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+}
+
+function monthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+}
+
+function mergeArchiveMonthRows(rows) {
+  for (const row of normalizeHistoryRows({ rows })) detailArchiveRowsByDate.set(String(row.date), row);
+}
+
+async function ensureHistoryMonth(date, { prefetch = false } = {}) {
+  const key = monthKey(date);
+  if (detailMonthCache.has(key)) return detailMonthCache.get(key);
+  if (detailMonthInFlight.has(key)) return detailMonthInFlight.get(key);
+
+  const promise = (async () => {
+    try {
+      const result = await api(`/api/my-history-month?month=${encodeURIComponent(key)}`);
+      const rows = Array.isArray(result?.data?.rows) ? result.data.rows : [];
+      detailMonthCache.set(key, rows);
+      mergeArchiveMonthRows(rows);
+      if (detailMode === "monthly" && monthKey(calendarDate) === key) renderMonthlyCalendar();
+      return rows;
+    } catch (e) {
+      console.warn("장기 월간 이력 조회:", key, e);
+      return [];
+    } finally {
+      detailMonthInFlight.delete(key);
+    }
+  })();
+  detailMonthInFlight.set(key, promise);
+
+  // 실제 화면 이동은 현재 월을 즉시 요청하고, 인접 월은 호출자가 백그라운드로 준비한다.
+  return promise;
+}
+
+function prefetchAdjacentHistoryMonths(date) {
+  const prev = new Date(date.getFullYear(), date.getMonth()-1, 1);
+  const next = new Date(date.getFullYear(), date.getMonth()+1, 1);
+  ensureHistoryMonth(prev, { prefetch:true });
+  if (next <= new Date(getBusinessDate().getFullYear(), getBusinessDate().getMonth(), 1)) ensureHistoryMonth(next, { prefetch:true });
+}
+
+function detailArchiveMinDate() {
+  const max = getBusinessDate();
+  return new Date(max.getFullYear(), max.getMonth()-(DETAIL_ARCHIVE_MONTHS-1), 1);
+}
+
+async function ensureHistoryRange(start, end) {
+  if (!start || !end) return;
+  const jobs = [];
+  for (let d=new Date(start.getFullYear(),start.getMonth(),1); d<=end; d=new Date(d.getFullYear(),d.getMonth()+1,1)) {
+    jobs.push(ensureHistoryMonth(d));
+  }
+  await Promise.all(jobs);
 }
 
 function getBusinessDate() {
@@ -1737,7 +1802,7 @@ function renderMyWeekly() {
     else setDetailState("weeklyDataState","empty","선택한 주의 배달 기록이 없습니다.");
   } else setDetailState("weeklyDataState","","");
 
-  const minAllowed=bounds?.min?startOfWedWeek(bounds.min):addDays(startOfWedWeek(getBusinessDate()),-84);
+  const minAllowed=startOfWedWeek(detailArchiveMinDate());
   const maxAllowed=startOfWedWeek(getBusinessDate());
   $("weeklyPrev").disabled=addDays(detailWeekStart,-7)<minAllowed;
   $("weeklyNext").disabled=addDays(detailWeekStart,7)>maxAllowed;
@@ -2216,6 +2281,9 @@ $("masterCenterSelect")?.addEventListener("change", async (e) => {
     myDailyDetail = null;
     myToday = null;
     myTodayBusinessKey = "";
+    detailArchiveRowsByDate.clear();
+    detailMonthCache.clear();
+    detailMonthInFlight.clear();
     await load();
   } catch (err) {
     console.error("마스터 지사 변경:", err);
@@ -2878,8 +2946,13 @@ function renderMonthlyCalendar() {
   setText("monthPrevious", prevMonthFullyAvailable && prevRows.length ? `${sumRows(prevRows).total.toLocaleString()}건` : "-");
 
   const [kind,msg]=historyStatusMessage("monthly"); setDetailState("monthlyDataState",kind,msg);
-  const minMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth()-2,1),maxMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth(),1);
+  const maxMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth(),1);
+  const minMonth=new Date(maxMonth.getFullYear(),maxMonth.getMonth()-(DETAIL_ARCHIVE_MONTHS-1),1);
   $("calendarPrev").disabled=new Date(year,month-1,1)<minMonth; $("calendarNext").disabled=new Date(year,month+1,1)>maxMonth;
+
+  // 화면은 즉시 그리고 DB 월 데이터는 비동기로 채운다. 인접 월도 선조회해 스와이프 체감을 유지한다.
+  ensureHistoryMonth(new Date(year,month,1));
+  prefetchAdjacentHistoryMonths(new Date(year,month,1));
 }
 
 function openCalendarDayModal(key) {
@@ -2978,7 +3051,7 @@ function renderDailyDetail() {
   setText("dailyFoodRate",row?rateText(p.food,p.total):"-"); setText("dailyBmartRate",row?rateText(p.bmart,p.total):"-"); setText("dailyStoreRate",row?rateText(p.store,p.total):"-"); setText("dailyOutRate",row?rateText(p.out,p.total):"-");
   renderHourly(row,key); renderPeaks(row,key);
   if(!row){if(detailLoadState.history==="loading"||detailLoadState.today==="loading")setDetailState("dailyDataState","loading","일별 배달 기록을 불러오는 중입니다.");else if(detailLoadState.history==="error"&&key!==bizKey)setDetailState("dailyDataState","error",detailLoadError.history||"90일 이력을 불러오지 못했습니다.");else setDetailState("dailyDataState","empty","선택한 날짜의 배달 기록이 없습니다.");}else setDetailState("dailyDataState","","");
-  const min=historyBounds()?.min || addDays(getBusinessDate(),-89),max=getBusinessDate(); $("dailyPrev").disabled=addDays(detailDailyDate,-1)<min; $("dailyNext").disabled=addDays(detailDailyDate,1)>max;
+  const min=detailArchiveMinDate(),max=getBusinessDate(); $("dailyPrev").disabled=addDays(detailDailyDate,-1)<min; $("dailyNext").disabled=addDays(detailDailyDate,1)>max;
 }
 
 /* =========================================================
@@ -3027,11 +3100,10 @@ function renderPeriodDetail() {
   }).join("") || `<div class="empty">데이터가 없습니다.</div>`;
 
 
-  const bounds=historyBounds();
-  if (bounds) {
+  {
     const spanDays=Math.round((periodEndDate-periodStartDate)/DETAIL_DAY_MS);
-    $("periodPrev").disabled = addDays(periodStartDate,-1) < bounds.min;
-    $("periodNext").disabled = addDays(periodEndDate,1) > bounds.max;
+    $("periodPrev").disabled = addDays(periodStartDate,-1) < detailArchiveMinDate();
+    $("periodNext").disabled = addDays(periodEndDate,1) > getBusinessDate();
     $("periodPrev").dataset.span=String(spanDays);
     $("periodNext").dataset.span=String(spanDays);
   }
@@ -3056,10 +3128,10 @@ function showDetailMode(mode) {
 
 document.querySelectorAll(".detail-tab").forEach(btn => btn.addEventListener("click", () => showDetailMode(btn.dataset.detailMode)));
 
-$("weeklyPrev")?.addEventListener("click",()=>{ detailWeekStart=addDays(detailWeekStart,-7); renderMyWeekly(); });
-$("weeklyNext")?.addEventListener("click",()=>{ detailWeekStart=addDays(detailWeekStart,7); renderMyWeekly(); });
-$("dailyPrev")?.addEventListener("click",()=>{ detailDailyDate=addDays(detailDailyDate,-1); renderDailyDetail(); });
-$("dailyNext")?.addEventListener("click",()=>{ detailDailyDate=addDays(detailDailyDate,1); renderDailyDetail(); });
+$("weeklyPrev")?.addEventListener("click",async()=>{ detailWeekStart=addDays(detailWeekStart,-7); renderMyWeekly(); await ensureHistoryRange(detailWeekStart,addDays(detailWeekStart,6)); renderMyWeekly(); });
+$("weeklyNext")?.addEventListener("click",async()=>{ detailWeekStart=addDays(detailWeekStart,7); renderMyWeekly(); await ensureHistoryRange(detailWeekStart,addDays(detailWeekStart,6)); renderMyWeekly(); });
+$("dailyPrev")?.addEventListener("click",async()=>{ detailDailyDate=addDays(detailDailyDate,-1); renderDailyDetail(); await ensureHistoryMonth(detailDailyDate); renderDailyDetail(); });
+$("dailyNext")?.addEventListener("click",async()=>{ detailDailyDate=addDays(detailDailyDate,1); renderDailyDetail(); await ensureHistoryMonth(detailDailyDate); renderDailyDetail(); });
 
 $("calendarPrev")?.addEventListener("click",()=>{ calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()-1,1); renderMonthlyCalendar(); });
 $("calendarNext")?.addEventListener("click",()=>{ calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()+1,1); renderMonthlyCalendar(); });
@@ -3071,8 +3143,8 @@ document.querySelectorAll("[data-period-days]").forEach(btn=>btn.addEventListene
     $("customPeriodPicker")?.classList.remove("hidden");
     const bounds=historyBounds();
     if(bounds){
-      $("periodStartDate").min=dateKey(bounds.min); $("periodStartDate").max=dateKey(bounds.max);
-      $("periodEndDate").min=dateKey(bounds.min); $("periodEndDate").max=dateKey(bounds.max);
+      $("periodStartDate").min=dateKey(detailArchiveMinDate()); $("periodStartDate").max=dateKey(getBusinessDate());
+      $("periodEndDate").min=dateKey(detailArchiveMinDate()); $("periodEndDate").max=dateKey(getBusinessDate());
       $("periodStartDate").value=dateKey(periodStartDate); $("periodEndDate").value=dateKey(periodEndDate);
     }
     return;
@@ -3081,13 +3153,14 @@ document.querySelectorAll("[data-period-days]").forEach(btn=>btn.addEventListene
   setPeriodRange(Number(value));
 }));
 
-$("applyCustomPeriod")?.addEventListener("click",()=>{
+$("applyCustomPeriod")?.addEventListener("click",async()=>{
   const start=parseLocalDate($("periodStartDate")?.value), end=parseLocalDate($("periodEndDate")?.value);
   if(!start||!end){ alert("조회할 시작일과 종료일을 선택해주세요."); return; }
   if(start>end){ alert("시작일은 종료일보다 늦을 수 없습니다."); return; }
   if(Math.floor((end-start)/DETAIL_DAY_MS)+1>90){ alert("기간조회는 최대 90일까지 가능합니다."); return; }
   periodStartDate=start; periodEndDate=end; periodVisibleRows=5; renderPeriodDetail();
   $("customPeriodPicker")?.classList.add("hidden");
+  await ensureHistoryRange(periodStartDate, periodEndDate); renderPeriodDetail();
 });
 
 $("customPeriodClose")?.addEventListener("click",()=>$("customPeriodPicker")?.classList.add("hidden"));
@@ -3097,19 +3170,19 @@ $("customPeriodPicker")?.addEventListener("click",e=>{
 
 window.addEventListener("resize", () => requestAnimationFrame(updateDetailRiderCardLayout));
 
-$("periodPrev")?.addEventListener("click",()=>{
-  const bounds=historyBounds(); if(!bounds)return;
+$("periodPrev")?.addEventListener("click",async()=>{
   const span=Math.round((periodEndDate-periodStartDate)/DETAIL_DAY_MS);
   let nextEnd=addDays(periodStartDate,-1), nextStart=addDays(nextEnd,-span);
-  if(nextStart<bounds.min){ nextStart=new Date(bounds.min); nextEnd=addDays(nextStart,span); if(nextEnd>bounds.max)nextEnd=new Date(bounds.max); }
+  const min=detailArchiveMinDate(); if(nextStart<min){ nextStart=new Date(min); nextEnd=addDays(nextStart,span); }
   periodStartDate=nextStart; periodEndDate=nextEnd; renderPeriodDetail();
+  await ensureHistoryRange(periodStartDate,periodEndDate); renderPeriodDetail();
 });
-$("periodNext")?.addEventListener("click",()=>{
-  const bounds=historyBounds(); if(!bounds)return;
+$("periodNext")?.addEventListener("click",async()=>{
   const span=Math.round((periodEndDate-periodStartDate)/DETAIL_DAY_MS);
   let nextStart=addDays(periodEndDate,1), nextEnd=addDays(nextStart,span);
-  if(nextEnd>bounds.max){ nextEnd=new Date(bounds.max); nextStart=addDays(nextEnd,-span); if(nextStart<bounds.min)nextStart=new Date(bounds.min); }
+  const max=getBusinessDate(); if(nextEnd>max){ nextEnd=new Date(max); nextStart=addDays(nextEnd,-span); }
   periodStartDate=nextStart; periodEndDate=nextEnd; renderPeriodDetail();
+  await ensureHistoryRange(periodStartDate,periodEndDate); renderPeriodDetail();
 });
 
 
