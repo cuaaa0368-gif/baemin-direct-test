@@ -2288,7 +2288,7 @@ nav button.active{
 
 
 /* 일별 빠른 이동: 기간조회와 동일 계열의 버튼 스타일 */
-.daily-jump-row{display:grid;grid-template-columns:minmax(0,1fr) clamp(40px,11vw,48px);gap:clamp(4px,1.4vw,7px);margin:8px 0 14px}
+.daily-jump-row{display:grid;grid-template-columns:minmax(0,1fr) clamp(40px,11vw,48px);gap:clamp(4px,1.4vw,7px);margin:8px 0 0}
 .daily-jump-row button{height:42px;border:1px solid #dce7e4;border-radius:13px;background:#fff;color:var(--mint-dark);font-weight:900}
 .daily-jump-row .daily-date-search{display:grid;place-items:center;padding:0}
 .daily-jump-row svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
