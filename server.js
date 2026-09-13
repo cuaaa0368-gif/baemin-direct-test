@@ -6,10 +6,74 @@ const {
   startBaeminDirectCollector,
   getBaeminDirectStatus
 } = require("./baemin-direct");
-const {
-  startBaeminDirectCollector: startGangnamBCollector,
-  getBaeminDirectStatus: getGangnamBDirectStatus
-} = require("./baemin-direct-gangnamb");
+const { fork } = require("child_process");
+
+// 추가 지사 목록. Render 환경변수 BAEMIN_EXTRA_CENTERS 하나만 수정하면 된다.
+// 형식: key|이름|Center-Id,key|이름|Center-Id
+// 예: gangnamb|강남B|DP2609083866,songpa|송파|DPxxxxxxxxxx
+const DEFAULT_EXTRA_CENTERS = "gangnamb|강남B|DP2609083866";
+const extraCenterWorkers = new Map();
+
+function parseExtraCenters(raw) {
+  const seen = new Set();
+  return String(raw || "")
+    .split(",")
+    .map(v => v.trim())
+    .filter(Boolean)
+    .map(item => {
+      const [key, name, centerId] = item.split("|").map(v => String(v || "").trim());
+      return { key, name, centerId };
+    })
+    .filter(c => {
+      if (!c.key || !c.name || !c.centerId || seen.has(c.key)) return false;
+      seen.add(c.key);
+      return true;
+    });
+}
+
+function startExtraCenterCollectors() {
+  const raw = process.env.BAEMIN_EXTRA_CENTERS ?? DEFAULT_EXTRA_CENTERS;
+  const list = parseExtraCenters(raw);
+
+  for (const center of list) {
+    const child = fork(path.join(__dirname, "baemin-center-worker.js"), [], {
+      env: {
+        ...process.env,
+        BAEMIN_CENTER_ID: center.centerId,
+        BAEMIN_CENTER_KEY: center.key,
+        BAEMIN_CENTER_NAME: center.name,
+        NURION_INTERNAL_PORT: String(PORT)
+      },
+      stdio: ["ignore", "inherit", "inherit", "ipc"]
+    });
+
+    const entry = {
+      key: center.key,
+      name: center.name,
+      centerId: center.centerId,
+      pid: child.pid,
+      status: { starting: true }
+    };
+    extraCenterWorkers.set(center.key, entry);
+
+    child.on("message", msg => {
+      if (msg?.type === "status") entry.status = msg.status;
+      if (msg?.type === "error") entry.status = { error: msg.message };
+    });
+    child.on("exit", (code, signal) => {
+      entry.status = { stopped: true, code, signal };
+      console.error(`[BAEMIN EXTRA CENTER STOP] ${center.key}/${center.name} code=${code} signal=${signal || ""}`);
+    });
+
+    console.log(`[BAEMIN EXTRA CENTER START] ${center.key}/${center.name} centerId=${center.centerId}`);
+  }
+}
+
+function getExtraCenterStatuses() {
+  return Array.from(extraCenterWorkers.values()).map(v => ({
+    key: v.key, name: v.name, centerId: v.centerId, pid: v.pid, status: v.status
+  }));
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -3067,8 +3131,8 @@ app.get(
       baeminDirect:
         getBaeminDirectStatus(),
 
-      baeminDirectGangnamB:
-        getGangnamBDirectStatus()
+      baeminDirectExtraCenters:
+        getExtraCenterStatuses()
 
     });
 
@@ -3093,16 +3157,8 @@ app.listen(
       );
     });
 
-    // 강남B: 서초와 같은 로그인 세션(BAEMIN_COOKIE)을 공유하고
-    // Center-Id만 분리하여 독립 수집한다.
-    startGangnamBCollector({
-      port: PORT,
-      ingestKey: INGEST_KEY
-    }).catch(err => {
-      console.error(
-        "[BAEMIN DIRECT GANGNAMB START FAILED]",
-        err.message
-      );
-    });
+    // 추가 지사는 공통 BAEMIN_COOKIE를 공유하고 Center-Id만 분리한다.
+    // 이후에는 BAEMIN_EXTRA_CENTERS 환경변수만 수정하면 지사를 늘릴 수 있다.
+    startExtraCenterCollectors();
   }
 );

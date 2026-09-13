@@ -1,0 +1,25 @@
+누리온 새 지사 추가 방법
+========================
+
+이 버전부터 추가 지사는 코드 파일을 복제하지 않습니다.
+Render의 BAEMIN_EXTRA_CENTERS 환경변수 한 곳에서 관리합니다.
+
+형식:
+key|지사명|Center-Id,key|지사명|Center-Id
+
+현재 강남B만:
+gangnamb|강남B|DP2609083866
+
+예: 송파 추가
+gangnamb|강남B|DP2609083866,songpa|송파|DPxxxxxxxxxx
+
+예: 강남A까지 추가
+gangnamb|강남B|DP2609083866,songpa|송파|DPxxxxxxxxxx,gangnama|강남A|DPyyyyyyyyyy
+
+주의:
+1) 기존 항목을 지우지 말고 쉼표(,) 뒤에 새 지사를 추가합니다.
+2) key는 지사마다 절대 중복되면 안 됩니다.
+3) Center-Id는 해당 관제의 실제 값을 넣습니다.
+4) BAEMIN_COOKIE는 공통 로그인 세션을 그대로 사용합니다.
+5) 저장 후 Render가 재배포/재시작되면 추가 지사 수집기가 자동 생성됩니다.
+6) 운영 DB의 계정/기록은 centerKey로 지사별 분리됩니다.
