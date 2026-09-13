@@ -2258,3 +2258,14 @@ nav button.active{
 #detailPage .calendar-day.sunday .day-number{color:#ef4444!important}
 #detailPage .calendar-day.saturday .day-number{color:#2563eb!important}
 #detailPage .calendar-day.holiday .day-number{color:#ef4444!important}
+
+/* 마스터 전용 지사 선택 */
+.master-center-select{
+  max-width:104px;
+  cursor:pointer;
+  appearance:auto;
+}
+.master-center-select:disabled{opacity:.65;cursor:wait}
+@media(max-width:420px){
+  .master-center-select{max-width:88px;padding-left:6px;padding-right:4px}
+}

@@ -33,8 +33,13 @@ function parseExtraCenters(raw) {
 }
 
 function startExtraCenterCollectors() {
-  const raw = process.env.BAEMIN_EXTRA_CENTERS ?? DEFAULT_EXTRA_CENTERS;
-  const list = parseExtraCenters(raw);
+  const configuredRaw = String(process.env.BAEMIN_EXTRA_CENTERS || "").trim();
+  // 기본 강남B를 유지하면서 Render에 추가한 지사를 병합한다.
+  // 같은 key가 있으면 Render 환경변수 쪽 설정을 우선한다.
+  const merged = new Map();
+  for (const c of parseExtraCenters(DEFAULT_EXTRA_CENTERS)) merged.set(c.key, c);
+  for (const c of parseExtraCenters(configuredRaw)) merged.set(c.key, c);
+  const list = Array.from(merged.values());
 
   for (const center of list) {
     const child = fork(path.join(__dirname, "baemin-center-worker.js"), [], {
@@ -81,6 +86,23 @@ function getExtraCenterStatuses() {
   return Array.from(extraCenterWorkers.values()).map(v => ({
     key: v.key, name: v.name, centerId: v.centerId, pid: v.pid, status: v.status
   }));
+}
+
+function getSelectableCenters() {
+  const primaryKey = String(process.env.BAEMIN_CENTER_KEY || "seocho").trim() || "seocho";
+  const primaryName = String(process.env.BAEMIN_CENTER_NAME || "서초").trim() || "서초";
+  const byKey = new Map([[primaryKey, { key: primaryKey, name: primaryName }]]);
+
+  for (const c of parseExtraCenters(DEFAULT_EXTRA_CENTERS)) byKey.set(c.key, { key: c.key, name: c.name });
+  for (const c of parseExtraCenters(process.env.BAEMIN_EXTRA_CENTERS || "")) byKey.set(c.key, { key: c.key, name: c.name });
+  for (const [key, d] of centers) {
+    if (!byKey.has(key)) byKey.set(key, { key, name: d?.centerName || key });
+  }
+  return Array.from(byKey.values());
+}
+
+function isSelectableCenterKey(key) {
+  return getSelectableCenters().some(c => c.key === String(key || "").trim());
 }
 
 const pool = new Pool({
@@ -1039,7 +1061,8 @@ function makeToken(account) {
 
   const payload = {
     loginId: account.loginId,
-    issuedAt: Date.now()
+    issuedAt: Date.now(),
+    activeCenterKey: account.centerKey
   };
 
   const body = Buffer
@@ -1094,6 +1117,16 @@ function verifyToken(t) {
 
     if (!account)
       return null;
+
+    // 마스터의 지사 선택은 계정 원본을 바꾸지 않고 토큰별 활성 지사로만 적용한다.
+    // 따라서 여러 기기에서 같은 마스터 계정을 사용해도 서로 지사 선택이 덮어써지지 않는다.
+    if (
+      (account.role === "master" || account.role === "superadmin") &&
+      payload.activeCenterKey &&
+      isSelectableCenterKey(payload.activeCenterKey)
+    ) {
+      return { ...account, centerKey: String(payload.activeCenterKey) };
+    }
 
     return account;
 
@@ -2386,6 +2419,46 @@ app.post(
       ok: true
     });
 
+  }
+);
+
+
+/* =========================================================
+   마스터 지사 선택
+========================================================= */
+
+app.get(
+  "/api/master/centers",
+  auth,
+  (req, res) => {
+    if (req.account.role !== "master" && req.account.role !== "superadmin") {
+      return res.status(403).json({ ok: false, message: "마스터 계정만 사용할 수 있습니다." });
+    }
+    res.json({ ok: true, data: getSelectableCenters(), activeCenterKey: req.account.centerKey });
+  }
+);
+
+app.post(
+  "/api/master/switch-center",
+  auth,
+  (req, res) => {
+    if (req.account.role !== "master" && req.account.role !== "superadmin") {
+      return res.status(403).json({ ok: false, message: "마스터 계정만 사용할 수 있습니다." });
+    }
+
+    const centerKey = String(req.body?.centerKey || "").trim();
+    if (!isSelectableCenterKey(centerKey)) {
+      return res.status(400).json({ ok: false, message: "등록되지 않은 지사입니다." });
+    }
+
+    const switched = { ...req.account, centerKey };
+    triggerFirstAccessHistory(centerKey);
+
+    res.json({
+      ok: true,
+      token: makeToken(switched),
+      user: { name: switched.name, role: switched.role, centerKey: switched.centerKey }
+    });
   }
 );
 

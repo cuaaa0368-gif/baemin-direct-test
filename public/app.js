@@ -2121,6 +2121,68 @@ $("myCompleteModalClose")
   );
 
 /* =========================================================
+   마스터 지사 선택
+========================================================= */
+
+async function loadMasterCenterSelector() {
+  const select = $("masterCenterSelect");
+  if (!select) return;
+
+  if (user?.role !== "master" && user?.role !== "superadmin") {
+    select.classList.add("hidden");
+    select.innerHTML = "";
+    return;
+  }
+
+  try {
+    const result = await api("/api/master/centers");
+    const centers = Array.isArray(result.data) ? result.data : [];
+    select.innerHTML = centers.map(c =>
+      `<option value="${String(c.key).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}">${String(c.name).replace(/&/g,"&amp;").replace(/</g,"&lt;")}</option>`
+    ).join("");
+    select.value = user.centerKey;
+    select.classList.remove("hidden");
+  } catch (e) {
+    console.warn("마스터 지사 목록 조회:", e);
+    select.classList.add("hidden");
+  }
+}
+
+$("masterCenterSelect")?.addEventListener("change", async (e) => {
+  const select = e.currentTarget;
+  const nextCenterKey = String(select.value || "").trim();
+  if (!nextCenterKey || nextCenterKey === user?.centerKey) return;
+
+  select.disabled = true;
+  try {
+    const result = await api("/api/master/switch-center", {
+      method: "POST",
+      body: JSON.stringify({ centerKey: nextCenterKey })
+    });
+    localStorage.setItem(TOKEN_KEY, result.token);
+    user = result.user;
+
+    // 이전 지사의 화면/캐시가 순간적으로 남지 않도록 비우고 새 지사를 전체 재조회한다.
+    data = null;
+    myReject = null;
+    centerReject = null;
+    myWeekly = null;
+    myHistory = null;
+    myDailyDetail = null;
+    myToday = null;
+    myTodayBusinessKey = "";
+    await load();
+  } catch (err) {
+    console.error("마스터 지사 변경:", err);
+    select.value = user?.centerKey || "";
+    alert(err.message || "지사 변경에 실패했습니다.");
+  } finally {
+    select.disabled = false;
+  }
+});
+
+
+/* =========================================================
    관리자 운영 설정
 ========================================================= */
 function isAdminUser() {
@@ -2310,6 +2372,7 @@ async function load() {
       me.user;
 
     renderOperationalControls();
+    await loadMasterCenterSelector();
 
 
     /* =====================================================
