@@ -6,6 +6,10 @@ const {
   startBaeminDirectCollector,
   getBaeminDirectStatus
 } = require("./baemin-direct");
+const {
+  startBaeminDirectCollector: startGangnamBCollector,
+  getBaeminDirectStatus: getGangnamBDirectStatus
+} = require("./baemin-direct-gangnamb");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -3061,7 +3065,10 @@ app.get(
         historyCenters.size,
 
       baeminDirect:
-        getBaeminDirectStatus()
+        getBaeminDirectStatus(),
+
+      baeminDirectGangnamB:
+        getGangnamBDirectStatus()
 
     });
 
@@ -3082,6 +3089,18 @@ app.listen(
     }).catch(err => {
       console.error(
         "[BAEMIN DIRECT START FAILED]",
+        err.message
+      );
+    });
+
+    // 강남B: 서초와 같은 로그인 세션(BAEMIN_COOKIE)을 공유하고
+    // Center-Id만 분리하여 독립 수집한다.
+    startGangnamBCollector({
+      port: PORT,
+      ingestKey: INGEST_KEY
+    }).catch(err => {
+      console.error(
+        "[BAEMIN DIRECT GANGNAMB START FAILED]",
         err.message
       );
     });
