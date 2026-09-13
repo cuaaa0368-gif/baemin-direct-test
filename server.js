@@ -195,11 +195,13 @@ const dailyDetailCenters = new Map();
 
 
 /* =========================================================
-   지사 운영 설정
-   - 세트수: 관리자가 변경할 때까지 계속 유지
-   - 요일 기준 수동 지정: 해당 영업일(06:00~다음 05:59)에만 유지
+   운영 설정
+   - 세트수: centerKey별 독립 영구 저장
+   - 요일 기준: 전체 지사 공통, 해당 영업일(06:00~다음 05:59)에만 유지
 ========================================================= */
 const operationalSettings = new Map();
+let globalDayOverride = { overrideDayType: null, overrideBusinessDate: null };
+let operationalSettingsReady = false;
 
 function normalizeSetCount(value) {
   const n = Number(value);
@@ -207,20 +209,86 @@ function normalizeSetCount(value) {
   return Math.round(n * 100) / 100;
 }
 
+async function initOperationalSettingsDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS nurion_operational_settings (
+        setting_key TEXT PRIMARY KEY,
+        set_count NUMERIC(8,2),
+        override_day_type TEXT,
+        override_business_date DATE,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const result = await pool.query(`
+      SELECT setting_key, set_count, override_day_type,
+             override_business_date::text AS override_business_date
+      FROM nurion_operational_settings
+    `);
+    for (const row of result.rows) {
+      if (row.setting_key === "global:day") {
+        globalDayOverride = {
+          overrideDayType: row.override_day_type || null,
+          overrideBusinessDate: row.override_business_date || null
+        };
+        continue;
+      }
+      if (!String(row.setting_key).startsWith("center:")) continue;
+      const centerKey = String(row.setting_key).slice(7);
+      const setCount = normalizeSetCount(row.set_count);
+      if (centerKey && setCount != null) operationalSettings.set(centerKey, { setCount });
+    }
+    operationalSettingsReady = true;
+    console.log(`[OPERATION SETTINGS DB LOADED] centers=${operationalSettings.size}`);
+  } catch (err) {
+    console.error("[OPERATION SETTINGS DB LOAD FAILED]", err.message);
+  }
+}
+
+async function saveCenterSetCountToDB(centerKey, setCount) {
+  await pool.query(`
+    INSERT INTO nurion_operational_settings(setting_key, set_count, updated_at)
+    VALUES ($1,$2,NOW())
+    ON CONFLICT (setting_key) DO UPDATE SET
+      set_count=EXCLUDED.set_count,
+      updated_at=NOW()
+  `, [`center:${centerKey}`, setCount]);
+}
+
+async function saveGlobalDayOverrideToDB(dayType, businessDate) {
+  await pool.query(`
+    INSERT INTO nurion_operational_settings
+      (setting_key, override_day_type, override_business_date, updated_at)
+    VALUES ('global:day',$1,$2,NOW())
+    ON CONFLICT (setting_key) DO UPDATE SET
+      override_day_type=EXCLUDED.override_day_type,
+      override_business_date=EXCLUDED.override_business_date,
+      updated_at=NOW()
+  `, [dayType, businessDate]);
+}
+
+function activeGlobalDayOverride() {
+  const businessDate = businessDateKeyKst();
+  const active =
+    globalDayOverride.overrideBusinessDate === businessDate &&
+    ["weekday", "saturday", "sunday"].includes(globalDayOverride.overrideDayType);
+  return {
+    overrideDayType: active ? globalDayOverride.overrideDayType : null,
+    overrideBusinessDate: active ? globalDayOverride.overrideBusinessDate : null,
+    manualActive: active
+  };
+}
+
 function getOperationalSetting(centerKey) {
   const key = String(centerKey || "").trim();
   const saved = operationalSettings.get(key) || {};
-  const businessDate = businessDateKeyKst();
-  const manualActive =
-    saved.overrideBusinessDate === businessDate &&
-    ["weekday", "saturday", "sunday"].includes(saved.overrideDayType);
-
+  const day = activeGlobalDayOverride();
   return {
     centerKey: key,
     setCount: normalizeSetCount(saved.setCount) ?? 10,
-    overrideDayType: manualActive ? saved.overrideDayType : null,
-    overrideBusinessDate: manualActive ? saved.overrideBusinessDate : null,
-    manualActive
+    overrideDayType: day.overrideDayType,
+    overrideBusinessDate: day.overrideBusinessDate,
+    manualActive: day.manualActive
   };
 }
 
@@ -228,15 +296,11 @@ function goalBaseForBusinessDate(businessDate, overrideDayType = null) {
   const [y, m, d] = String(businessDate).split("-").map(Number);
   let day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 
-  // 수동 기준은 해당 영업일에서만 자동 달력/공휴일 판정보다 우선한다.
   if (overrideDayType === "saturday") day = 6;
   else if (overrideDayType === "sunday") day = 0;
   else if (overrideDayType === "weekday") {
-    // 평일 지정은 실제 날짜의 평일 세부 기준을 유지한다.
-    // 금요일이면 금요일 기준, 월~목이면 월~목 기준.
     if (day === 0 || day === 6) day = 1;
   }
-
   return day;
 }
 
@@ -260,15 +324,10 @@ function goalsForCenter(centerKey) {
   ]);
 
   let day;
-  if (setting.manualActive) {
-    day = goalBaseForBusinessDate(businessDate, setting.overrideDayType);
-  } else if (businessDate === "2026-07-17") {
-    day = 6;
-  } else if (holidayDates.has(businessDate)) {
-    day = 0;
-  } else {
-    day = actualDay;
-  }
+  if (setting.manualActive) day = goalBaseForBusinessDate(businessDate, setting.overrideDayType);
+  else if (businessDate === "2026-07-17") day = 6;
+  else if (holidayDates.has(businessDate)) day = 0;
+  else day = actualDay;
 
   const pick = base => {
     if ([1,2,3,4].includes(day)) return base.monThu;
@@ -300,18 +359,10 @@ function goalsForCenter(centerKey) {
   };
 }
 
-// 현재 단계에서는 운영 설정을 DB에 저장하지 않는다.
-// Render 프로세스 메모리에서만 유지한다.
-// - 세트수: 프로세스가 살아있는 동안 관리자가 다시 변경할 때까지 유지
-// - 요일 수동 기준: 현재 영업일에만 유효하고 다음 06:00부터 자동 무효
 function saveOperationalSetting(centerKey, setting) {
-  operationalSettings.set(String(centerKey || "").trim(), {
-    setCount: normalizeSetCount(setting?.setCount) ?? 10,
-    overrideDayType: setting?.overrideDayType || null,
-    overrideBusinessDate: setting?.overrideBusinessDate || null
-  });
+  const key = String(centerKey || "").trim();
+  operationalSettings.set(key, { setCount: normalizeSetCount(setting?.setCount) ?? 10 });
 }
-
 
 /* =========================================================
    실시간 누적값 안정화
@@ -1033,6 +1084,7 @@ async function saveAccountToDB(account) {
   }
 }
 loadAccountsFromDB();
+initOperationalSettingsDB();
 
 
 /*
@@ -3078,7 +3130,7 @@ app.get("/api/admin/operational-settings", auth, (req, res) => {
   res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
 });
 
-app.post("/api/admin/operational-settings/set-count", auth, (req, res) => {
+app.post("/api/admin/operational-settings/set-count", auth, async (req, res) => {
   if (req.account.role !== "master" && req.account.role !== "superadmin") {
     return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
   }
@@ -3086,17 +3138,18 @@ app.post("/api/admin/operational-settings/set-count", auth, (req, res) => {
   if (setCount == null) {
     return res.status(400).json({ ok:false, message:"세트수는 0보다 큰 숫자로 입력해주세요." });
   }
-  const current = getOperationalSetting(req.account.centerKey);
-  const next = {
-    setCount,
-    overrideDayType: current.overrideDayType,
-    overrideBusinessDate: current.overrideBusinessDate
-  };
-  saveOperationalSetting(req.account.centerKey, next);
-  res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
+  const centerKey = req.account.centerKey;
+  try {
+    await saveCenterSetCountToDB(centerKey, setCount);
+    saveOperationalSetting(centerKey, { setCount });
+    res.json({ ok:true, data:goalsForCenter(centerKey).state });
+  } catch (err) {
+    console.error("[SET COUNT DB SAVE FAILED]", centerKey, err.message);
+    return res.status(500).json({ ok:false, message:"세트수 저장에 실패했습니다." });
+  }
 });
 
-app.post("/api/admin/operational-settings/day-basis", auth, (req, res) => {
+app.post("/api/admin/operational-settings/day-basis", auth, async (req, res) => {
   if (req.account.role !== "master" && req.account.role !== "superadmin") {
     return res.status(403).json({ ok:false, message:"관리자만 변경할 수 있습니다." });
   }
@@ -3104,14 +3157,15 @@ app.post("/api/admin/operational-settings/day-basis", auth, (req, res) => {
   if (!["weekday","saturday","sunday"].includes(dayType)) {
     return res.status(400).json({ ok:false, message:"요일 기준을 선택해주세요." });
   }
-  const current = getOperationalSetting(req.account.centerKey);
-  const next = {
-    setCount: current.setCount,
-    overrideDayType: dayType,
-    overrideBusinessDate: businessDateKeyKst()
-  };
-  saveOperationalSetting(req.account.centerKey, next);
-  res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
+  const businessDate = businessDateKeyKst();
+  try {
+    await saveGlobalDayOverrideToDB(dayType, businessDate);
+    globalDayOverride = { overrideDayType: dayType, overrideBusinessDate: businessDate };
+    res.json({ ok:true, data:goalsForCenter(req.account.centerKey).state });
+  } catch (err) {
+    console.error("[DAY BASIS DB SAVE FAILED]", err.message);
+    return res.status(500).json({ ok:false, message:"요일 기준 저장에 실패했습니다." });
+  }
 });
 
 /* =========================================================
