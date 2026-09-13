@@ -26,8 +26,8 @@ const CENTER_KEY = String(process.env.BAEMIN_CENTER_KEY || "seocho").trim() || "
 const CENTER_NAME = String(process.env.BAEMIN_CENTER_NAME || "서초").trim() || "서초";
 
 const LIVE_MS = Math.max(
-  10_000,
-  Number(process.env.BAEMIN_POLL_MS || 10_000) || 10_000
+  30_000,
+  Number(process.env.BAEMIN_POLL_MS || 30_000) || 30_000
 );
 
 const WEEKLY_MS = Math.max(
@@ -900,6 +900,22 @@ function historyRow(businessDate, r) {
   };
 }
 
+function buildDailyDetailPayload(week) {
+  const rows = [];
+  for (const day of week.days) {
+    day.map.forEach(r => rows.push(historyRow(day.date, r)));
+  }
+  return {
+    centerKey: CENTER_KEY,
+    centerName: CENTER_NAME,
+    fromDate: week.wed,
+    toDate: week.today,
+    dayCount: week.days.length,
+    rows,
+    generatedAt: new Date().toISOString()
+  };
+}
+
 async function buildHistoryPayload() {
   const today = getBusinessDateKey();
   const fromDate = addDaysKey(today, -89);
@@ -1017,6 +1033,7 @@ async function syncWeeklyReject() {
     const week = await collectWeekMaps();
     const weeklyPayload = buildWeeklyPayload(week);
     const rejectPayload = buildRejectPayload(week);
+    const dailyDetailPayload = buildDailyDetailPayload(week);
 
     await postInternal(
       `/api/ingest-weekly/${encodeURIComponent(CENTER_KEY)}`,
@@ -1037,6 +1054,11 @@ async function syncWeeklyReject() {
     await postInternal(
       `/api/ingest-reject/${encodeURIComponent(CENTER_KEY)}`,
       rejectPayload
+    );
+
+    await postInternal(
+      `/api/ingest-daily-detail/${encodeURIComponent(CENTER_KEY)}`,
+      dailyDetailPayload
     );
 
     state.counters.rejectSyncs++;

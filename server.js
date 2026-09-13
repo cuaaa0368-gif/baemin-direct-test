@@ -38,6 +38,7 @@ const LOGIN_SECRET = process.env.LOGIN_SECRET || INGEST_KEY;
 const centers = new Map();
 const rejectCenters = new Map();
 const historyCenters = new Map();
+const dailyDetailCenters = new Map();
 
 
 /* =========================================================
@@ -900,7 +901,7 @@ addAccount({
   password: "5567",
   role: "master",
   centerKey: "seocho",
-  name: "서초 마스터"
+  name: "마스터"
 });
 
 
@@ -1266,6 +1267,44 @@ app.post(
 );
 
 /* =========================================================
+   일별 상세 데이터 수신 - 주간 30초 수집 결과를 재사용
+   월간 90일 데이터와 분리하여 월간 10시 갱신 정책을 유지한다.
+========================================================= */
+
+app.post(
+  "/api/ingest-daily-detail/:centerKey",
+  (req, res) => {
+    if (req.get("x-ingest-key") !== INGEST_KEY) {
+      return res.status(401).json({ ok: false });
+    }
+
+    const centerKey = String(req.params.centerKey || "").trim();
+    if (!centerKey) return res.status(400).json({ ok: false, message: "centerKey 필요" });
+
+    const body = req.body || {};
+    const incomingRows = Array.isArray(body.rows) ? body.rows : [];
+    const previous = dailyDetailCenters.get(centerKey) || {};
+    const rows = mergeHistoryRows(
+      previous.rows, incomingRows, String(body.fromDate || ""), String(body.toDate || "")
+    );
+
+    dailyDetailCenters.set(centerKey, {
+      centerKey,
+      centerName: body.centerName || centerKey,
+      fromDate: body.fromDate || "",
+      toDate: body.toDate || "",
+      dayCount: Number(body.dayCount) || 0,
+      rows,
+      generatedAt: body.generatedAt || null,
+      receivedAt: new Date().toISOString()
+    });
+
+    console.log("[DAILY DETAIL SAVED]", centerKey, "rows:", rows.length);
+    res.json({ ok: true, centerKey, rowCount: rows.length });
+  }
+);
+
+/* =========================================================
    누리온 앱용 주간 데이터 수신
 ========================================================= */
 
@@ -1414,6 +1453,34 @@ saveWeeklyRankingToDB(
 
     });
 
+  }
+);
+
+/* =========================================================
+   본인 일별 상세 - 현재 주간 30초 갱신 데이터
+========================================================= */
+
+app.get(
+  "/api/my-daily-detail",
+  auth,
+  (req, res) => {
+    const account = req.account;
+    const riderUserId = String(account.riderUserId || "").trim();
+    if (!riderUserId) return res.status(404).json({ ok: false, message: "라이더 계정이 연결되어 있지 않습니다." });
+
+    const detail = dailyDetailCenters.get(account.centerKey);
+    const rows = Array.isArray(detail?.rows)
+      ? detail.rows.filter(row => String(row.userId || "").trim() === riderUserId)
+      : [];
+
+    res.json({
+      ok: true,
+      data: {
+        name: account.name, userId: riderUserId,
+        fromDate: detail?.fromDate || "", toDate: detail?.toDate || "",
+        receivedAt: detail?.receivedAt || null, rows
+      }
+    });
   }
 );
 

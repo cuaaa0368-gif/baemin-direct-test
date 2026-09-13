@@ -6,6 +6,7 @@ let myReject = null;
 let centerReject = null;
 let myWeekly = null;
 let myHistory = null;
+let myDailyDetail = null;
 let myToday = null;
 let myTodayBusinessKey = "";
 
@@ -2620,6 +2621,19 @@ data.eveningRanking = [];
     }
      
 /* =====================================================
+   나의 일별 상세 (현재 주간, 서버 30초 수집값)
+===================================================== */
+
+try {
+  const result = await api("/api/my-daily-detail");
+  myDailyDetail = result?.data ?? result ?? null;
+  if (detailMode === "daily") renderDailyDetail();
+} catch (e) {
+  console.warn("나의 일별 상세:", e);
+  // 일시 오류 때 기존 정상 일별 상세값은 유지한다.
+}
+
+/* =====================================================
    나의 오늘 완료
 ===================================================== */
 
@@ -2830,6 +2844,14 @@ function renderDailyDetail() {
   setDetailRiderNames(); initializeDetailDates(); if(!detailDailyDate)return;
   const key=dateKey(detailDailyDate),bizKey=dateKey(getBusinessDate());
   let row=detailRows().find(r=>String(r.date)===key);
+  const freshDailyRows = normalizeHistoryRows(myDailyDetail);
+  const freshDaily = freshDailyRows.find(r=>String(r.date)===key);
+  if(freshDaily){
+    const previous=row||{};
+    row={...previous,...freshDaily,date:key};
+    if(!freshDaily.deliveryPeakTimeCount && previous.deliveryPeakTimeCount) row.deliveryPeakTimeCount=previous.deliveryPeakTimeCount;
+    if((!Array.isArray(freshDaily.hourlyCompleted)||!freshDaily.hourlyCompleted.length) && previous.hourlyCompleted) row.hourlyCompleted=previous.hourlyCompleted;
+  }
   if(key===bizKey&&myToday){
     const previous=row||{};
     row={...previous,...myToday,date:key};
