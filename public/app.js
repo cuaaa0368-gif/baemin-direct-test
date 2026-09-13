@@ -2739,6 +2739,23 @@ function heatClass(count) {
   return "heat-4";
 }
 
+// 대한민국 공휴일(2026) - 월간 달력 날짜 숫자 표시용
+const KOREA_HOLIDAYS_2026 = new Set([
+  "2026-01-01",
+  "2026-02-16", "2026-02-17", "2026-02-18",
+  "2026-03-01", "2026-03-02",
+  "2026-05-05", "2026-05-24", "2026-05-25",
+  "2026-06-03", "2026-06-06",
+  "2026-08-15", "2026-08-17",
+  "2026-09-24", "2026-09-25", "2026-09-26",
+  "2026-10-03", "2026-10-05", "2026-10-09",
+  "2026-12-25"
+]);
+
+function isKoreaHoliday(key) {
+  return KOREA_HOLIDAYS_2026.has(String(key));
+}
+
 function renderMonthlyCalendar() {
   setDetailRiderNames(); initializeDetailDates();
   const calendar=$("monthlyCalendar"),title=$("calendarTitle"); if(!calendar||!title)return;
@@ -2747,8 +2764,8 @@ function renderMonthlyCalendar() {
   const first=new Date(year,month,1),last=new Date(year,month+1,0),gridStart=addDays(first,-first.getDay()),gridEnd=addDays(last,6-last.getDay());
   let html="";
   for(let d=new Date(gridStart);d<=gridEnd;d=addDays(d,1)){
-    const key=dateKey(d),row=rowMap.get(key),count=row?rowParts(row).total:0,other=d.getMonth()!==month;
-    html+=`<button type="button" class="calendar-day ${row?heatClass(count):"heat-0"} ${other?"other-month":""} ${d.getDay()===0?"sunday":""} ${d.getDay()===6?"saturday":""}" data-date="${key}" ${row?"":"disabled"}><span class="day-number">${d.getDate()}</span><span class="day-count">${row&&count>0?`${count}`:""}</span></button>`;
+    const key=dateKey(d),row=rowMap.get(key),count=row?rowParts(row).total:0,other=d.getMonth()!==month,holiday=isKoreaHoliday(key);
+    html+=`<button type="button" class="calendar-day ${row?heatClass(count):"heat-0"} ${other?"other-month":""} ${d.getDay()===0?"sunday":""} ${d.getDay()===6?"saturday":""} ${holiday?"holiday":""}" data-date="${key}" ${row?"":"disabled"}><span class="day-number">${d.getDate()}</span><span class="day-count">${row&&count>0?`${count}`:""}</span></button>`;
   }
   calendar.innerHTML=html;
   calendar.querySelectorAll(".calendar-day[data-date]:not(:disabled)").forEach(btn=>btn.addEventListener("click",()=>openCalendarDayModal(btn.dataset.date)));

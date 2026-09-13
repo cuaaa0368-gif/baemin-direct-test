@@ -1668,7 +1668,7 @@ nav button.active{
 #detailPage .recent-months button.active:not(.recent-label){border-color:#aeead7;background:#e9faf4;color:#0aa879}
 #detailPage .calendar-card{padding:10px}
 #detailPage .calendar-weekdays{display:grid;grid-template-columns:repeat(7,1fr);margin:0 0 5px}
-#detailPage .calendar-weekdays span{text-align:center;color:#47515e;font-size:10px;font-weight:850}
+#detailPage .calendar-weekdays span{text-align:center;color:#47515e;font-size:11px;font-weight:900}
 #detailPage .calendar-weekdays span:first-child{color:#ef4444}#detailPage .calendar-weekdays span:last-child{color:#2563eb}
 #detailPage .monthly-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 #detailPage .calendar-day{position:relative;min-width:0;min-height:59px;padding:6px 3px;border:0;border-radius:9px;background:#fff;color:#111827;text-align:center}
@@ -1677,7 +1677,7 @@ nav button.active{
 #detailPage .calendar-day.heat-0{background:#f7f9f9}#detailPage .calendar-day.heat-1{background:#eaf9f4}#detailPage .calendar-day.heat-2{background:#d2f4e8}#detailPage .calendar-day.heat-3{background:#a8e9d4}#detailPage .calendar-day.heat-4{background:#69d9b5}#detailPage .calendar-day.heat-5{background:#18c68c;color:#073c2d}
 #detailPage .calendar-day .day-number{display:block;text-align:left;padding-left:3px;font-size:9px;font-weight:800}
 #detailPage .calendar-day .day-count{display:block;margin-top:9px;color:inherit;font-size:11px;font-weight:950;white-space:nowrap}
-#detailPage .calendar-day.sunday .day-number{color:#ef4444}#detailPage .calendar-day.saturday .day-number{color:#2563eb}
+#detailPage .calendar-day.sunday .day-number{color:#ef4444}#detailPage .calendar-day.saturday .day-number{color:#2563eb}#detailPage .calendar-day.holiday .day-number{color:#ef4444}
 #detailPage .monthly-bottom-row{display:grid;grid-template-columns:1.15fr .85fr;gap:9px}
 #detailPage .heat-legend,#detailPage .month-stats{padding:12px;background:#fff;border:1px solid var(--d-line);border-radius:14px}
 #detailPage .heat-legend>strong{display:block;margin-bottom:9px;font-size:10px;font-weight:900}#detailPage .heat-legend>strong small{color:#7f8995;font-weight:600}
@@ -1894,7 +1894,8 @@ nav button.active{
 /* Monthly calendar: 7 fixed columns, portrait cells, count centered and always contained. */
 #detailPage .monthly-control-row{display:grid;grid-template-columns:1fr;gap:8px}
 #detailPage .calendar-card{padding:clamp(6px,2vw,9px);overflow:hidden}
-#detailPage .calendar-weekdays{display:none!important}
+#detailPage .calendar-weekdays{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr));margin:0 0 6px;gap:clamp(2px,.8vw,4px)}
+#detailPage .calendar-weekdays span{font-size:clamp(11px,3vw,13px);font-weight:900;text-align:center}
 #detailPage .monthly-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:clamp(2px,.8vw,4px);border-top:0}
 #detailPage .calendar-day{
   position:relative;width:100%;min-width:0;aspect-ratio:1/1.2;min-height:0;
@@ -2252,3 +2253,8 @@ nav button.active{
   .admin-operation-controls{ gap:4px; }
   .admin-operation-btn{ padding:6px 7px; font-size:10px; }
 }
+
+/* Monthly calendar weekend/holiday date colors: holiday red takes precedence over Saturday blue. */
+#detailPage .calendar-day.sunday .day-number{color:#ef4444!important}
+#detailPage .calendar-day.saturday .day-number{color:#2563eb!important}
+#detailPage .calendar-day.holiday .day-number{color:#ef4444!important}
