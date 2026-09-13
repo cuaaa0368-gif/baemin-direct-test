@@ -177,11 +177,18 @@
 
     <div class="userbar">
 
-      <span id="who"></span>
+      <div class="maintenance-notice" aria-label="관제 서버 점검 안내">
+        <div>관제 서버 점검 · <strong>매일 06:00 ~ 09:30</strong></div>
+        <div>해당 시간에는 데이터가 불일치할 수 있습니다.</div>
+      </div>
 
-      <button id="logout">
-        로그아웃
-      </button>
+      <div class="userbar-account">
+        <span id="who"></span>
+
+        <button id="logout">
+          로그아웃
+        </button>
+      </div>
 
     </div>
 
@@ -304,7 +311,7 @@
 
       <div class="section-title status-section-title">
 
-        <h2>
+        <h2 id="statusTitle">
           현황
         </h2>
 

@@ -344,13 +344,38 @@ main{
 .userbar{
   display:flex;
   align-items:center;
-  justify-content:flex-end;
+  justify-content:space-between;
 
   gap:10px;
 
   min-height:18px;
 
   margin-bottom:10px;
+}
+
+.maintenance-notice{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  flex:1 1 auto;
+  min-width:0;
+  color:#9ca3af;
+  font-size:11px;
+  line-height:1.35;
+  white-space:nowrap;
+}
+
+.maintenance-notice strong{
+  color:#20c997;
+  font-weight:700;
+}
+
+.userbar-account{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  flex:0 0 auto;
 }
 
 .userbar span{

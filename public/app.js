@@ -2185,11 +2185,28 @@ async function refreshOperationalState() {
   }
 }
 
+function renderCalendarStatusTitle() {
+  const el = $("statusTitle");
+  if (!el) return;
+
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short"
+  }).formatToParts(new Date());
+
+  const get = (type) => parts.find((part) => part.type === type)?.value || "";
+  el.textContent = `${get("month")}/${get("day")}(${get("weekday")}) 현황`;
+}
+
 /* =========================================================
    MAIN
 ========================================================= */
 
 function renderMain(d) {
+
+  renderCalendarStatusTitle();
 
   data = d;
 
@@ -3280,6 +3297,8 @@ if (installAppBtn) {
 }
 
 updateInstallButton();
+renderCalendarStatusTitle();
+setInterval(renderCalendarStatusTitle, 60 * 1000);
 
 
 /* =========================================================
