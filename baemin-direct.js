@@ -161,6 +161,12 @@ function safe(n) {
   return Number(n) || 0;
 }
 
+// 과거 배민 응답은 slaOutComplete에 -totalComplete 형태의 보정값을 넣기도 했다.
+// 누리온에서 시간외 완료는 0 이상의 실제 완료건수만 인정한다.
+function safeOut(n) {
+  return Math.max(0, safe(n));
+}
+
 function mapName(name) {
   if (!name) return name;
   const key = String(name).replace(/\s+/g, " ").trim().toUpperCase();
@@ -605,7 +611,7 @@ function buildLivePayload(snapshot) {
     const foodComplete = safe(a.foodComplete);
     const bmartComplete = safe(a.bmartComplete);
     const storeComplete = safe(a.storeComplete);
-    const slaOutComplete = safe(a.slaOutComplete);
+    const slaOutComplete = safeOut(a.slaOutComplete);
     const nurionTotal = foodComplete + bmartComplete + storeComplete + slaOutComplete;
     return {
       name: mapName(d.name),
@@ -719,7 +725,7 @@ function buildWeeklyPayload(week) {
         safe(a.foodComplete) +
         safe(a.bmartComplete) +
         safe(a.storeComplete) +
-        safe(a.slaOutComplete);
+        safeOut(a.slaOutComplete);
 
       item.days[day.weekday] = total;
       item.weeklyTotal += total;
@@ -748,7 +754,7 @@ function buildWeeklyPayload(week) {
         safe(a.foodComplete) +
         safe(a.bmartComplete) +
         safe(a.storeComplete) +
-        safe(a.slaOutComplete);
+        safeOut(a.slaOutComplete);
     });
   }
 
@@ -767,7 +773,7 @@ function buildWeeklyPayload(week) {
     const food = safe(a.foodComplete);
     const bmart = safe(a.bmartComplete);
     const store = safe(a.storeComplete);
-    const out = safe(a.slaOutComplete);
+    const out = safeOut(a.slaOutComplete);
     todayRanking.push({
       userId: String(r.userId || ""),
       name: String(r.name || ""),
@@ -895,16 +901,16 @@ function historyRow(businessDate, r) {
     name: String(r.name || "").trim(),
     deliveryAcceptanceCount: { ...a },
     deliveryPeakTimeCount: { ...p },
-    totalComplete: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safe(a.slaOutComplete),
+    totalComplete: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safeOut(a.slaOutComplete),
     totalReject: safe(a.totalReject),
     totalCancel: safe(a.totalCancel),
     totalRiderFault: safe(a.totalRiderFault),
     food: safe(a.foodComplete),
     bmart: safe(a.bmartComplete),
     store: safe(a.storeComplete),
-    out: safe(a.slaOutComplete),
-    allDay: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safe(a.slaOutComplete),
-    total: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safe(a.slaOutComplete),
+    out: safeOut(a.slaOutComplete),
+    allDay: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safeOut(a.slaOutComplete),
+    total: safe(a.foodComplete) + safe(a.bmartComplete) + safe(a.storeComplete) + safeOut(a.slaOutComplete),
     morning: safe(p.morning),
     afternoon: safe(p.afternoon),
     evening: safe(p.evening),

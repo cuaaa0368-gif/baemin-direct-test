@@ -180,6 +180,26 @@ const historyArchiveReady = (async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // v2: 과거 slaOutComplete 음수 보정값을 시간외 완료로 잘못 합산하던 장기이력을 1회 초기화한다.
+  // 운영 통계/계정/설정/identity alias는 건드리지 않는다. 재배포 후에도 반복 초기화되지 않도록 migration marker를 남긴다.
+  await pool.query(`CREATE TABLE IF NOT EXISTS nurion_history_migrations (migration_key TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  const historyNormV2 = await pool.query(`SELECT 1 FROM nurion_history_migrations WHERE migration_key='history_slaout_nonnegative_v2'`);
+  if (!historyNormV2.rowCount) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM nurion_rider_history');
+      await client.query('DELETE FROM nurion_history_backfill_state');
+      await client.query(`INSERT INTO nurion_history_migrations (migration_key) VALUES ('history_slaout_nonnegative_v2')`);
+      await client.query('COMMIT');
+      console.log('[HISTORY MIGRATION] v2 reset complete - archive/backfill state cleared once');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(()=>{});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
   console.log('[HISTORY DB] archive tables ready');
 })().catch(err => {
   console.error('[HISTORY DB INIT FAILED]', err.message);
@@ -705,7 +725,7 @@ async function saveHistoryArchiveToDB(centerKey, incomingRows) {
       const food = Number(r?.food ?? a.foodComplete) || 0;
       const bmart = Number(r?.bmart ?? a.bmartComplete) || 0;
       const store = Number(r?.store ?? a.storeComplete) || 0;
-      const out = Number(r?.out ?? a.slaOutComplete) || 0;
+      const out = Math.max(0, Number(r?.out ?? a.slaOutComplete) || 0);
       return {
         stat_date: String(r?.date || ''), center_key: centerKey,
         rider_user_id: String(r?.userId || '').trim(), rider_name: String(r?.name || ''),
@@ -2033,7 +2053,7 @@ app.get(
     const food = Number(live?.foodComplete ?? weekly?.food) || 0;
     const bmart = Number(live?.bmartComplete ?? weekly?.bmart) || 0;
     const store = Number(live?.storeComplete ?? weekly?.store) || 0;
-    const out = Number(live?.slaOutComplete ?? weekly?.out) || 0;
+    const out = Math.max(0, Number(live?.slaOutComplete ?? weekly?.out) || 0);
     const componentTotal = food + bmart + store + out;
     const total = componentTotal || Number(live?.allDayComplete ?? weekly?.val) || 0;
 
