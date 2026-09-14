@@ -2984,8 +2984,14 @@ const detailPeakCache = new Map();
 function normalizeHourLabel(value) {
   const match = String(value ?? "").match(/(\d{1,2})/);
   if (!match) return null;
-  const hour = Number(match[1]);
-  return Number.isFinite(hour) && hour >= 0 && hour <= 23 ? hour : null;
+
+  let hour = Number(match[1]);
+  if (!Number.isFinite(hour)) return null;
+
+  // 배민 영업일 시간: 24=00시, 25=01시 ... 29=05시
+  if (hour >= 24 && hour <= 29) hour -= 24;
+
+  return hour >= 0 && hour <= 23 ? hour : null;
 }
 
 function extractHourly(row) {
