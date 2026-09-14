@@ -5,6 +5,8 @@ const { Pool } = require("pg");
 const {
   startBaeminDirectCollector,
   getBaeminDirectStatus,
+  requestPhoneVerification,
+  submitPhoneVerification,
   __test: baeminDirectTest
 } = require("./baemin-direct");
 const { fork } = require("child_process");
@@ -2640,6 +2642,76 @@ app.post(
   }
 );
 
+app.post(
+  "/api/master/baemin-auth/send-code",
+  auth,
+  async (req, res) => {
+    if (req.account.role !== "master" && req.account.role !== "superadmin") {
+      return res.status(403).json({
+        ok: false,
+        message: "마스터 계정만 사용할 수 있습니다."
+      });
+    }
+
+    try {
+      await requestPhoneVerification();
+
+      console.log("[BAEMIN AUTH] verification code requested");
+
+      return res.json({
+        ok: true,
+        message: "인증번호를 발송했습니다."
+      });
+    } catch (error) {
+      console.error("[BAEMIN AUTH SEND FAILED]", error.message);
+
+      return res.status(502).json({
+        ok: false,
+        message: "배민 인증번호 발송에 실패했습니다."
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/master/baemin-auth/verify-code",
+  auth,
+  async (req, res) => {
+    if (req.account.role !== "master" && req.account.role !== "superadmin") {
+      return res.status(403).json({
+        ok: false,
+        message: "마스터 계정만 사용할 수 있습니다."
+      });
+    }
+
+    const verificationCode = String(req.body?.verificationCode || "").trim();
+
+    if (!/^\d{6}$/.test(verificationCode)) {
+      return res.status(400).json({
+        ok: false,
+        message: "인증번호 6자리를 입력해주세요."
+      });
+    }
+
+    try {
+      await submitPhoneVerification(verificationCode);
+
+      console.log("[BAEMIN AUTH] verification completed");
+
+      return res.json({
+        ok: true,
+        message: "배민 재인증이 완료되었습니다."
+      });
+    } catch (error) {
+      console.error("[BAEMIN AUTH VERIFY FAILED]", error.message);
+
+      return res.status(502).json({
+        ok: false,
+        message: "인증번호 확인에 실패했습니다."
+      });
+    }
+  }
+);
 
 /* =========================================================
    내 정보
