@@ -72,6 +72,8 @@ const state = {
   weeklyIntervalMs: WEEKLY_MS,
   startedAt: null,
   authRequired: false,
+  authStage: "authenticated",
+  authMessage: "",
   lastCenterCheck: null,
   lastLive: null,
   lastWeekly: null,
@@ -203,6 +205,8 @@ function updateBaeminSession(cookieHeader) {
 
   loadCookieHeader(cookie);
   state.authRequired = false;
+  state.authStage = "authenticated";
+  state.authMessage = "";
 
   return {
     ok: true,
@@ -445,42 +449,54 @@ async function callBaeminPost(path, body) {
 
   if (response.ok) {
     state.counters.baeminSuccess++;
+    // /phone-verification 200은 2차 인증 단계가 정상적으로 열려 있다는 뜻이다.
+    if (path === "/phone-verification") {
+      state.authRequired = true;
+      state.authStage = "secondary";
+      state.authMessage = "2차 인증번호 발송 가능";
+    }
   } else if (response.status === 401 || response.status === 403) {
     state.counters.authFailures++;
     state.authRequired = true;
+
+    const raw = JSON.stringify(responseBody || {}) + " " + String(text || "");
+    const primary = /비즈회원\s*로그인이\s*필요|business\s*member|business.*login/i.test(raw);
+    const secondary = /TWO_FACTOR_REQUIRED|two.?factor|2차|인증번호/i.test(raw);
+
+    if (primary) {
+      state.authStage = "primary";
+      state.authMessage = "비즈회원 로그인이 필요합니다.";
+    } else if (secondary) {
+      state.authStage = "secondary";
+      state.authMessage = "2차 인증이 필요합니다.";
+    } else {
+      state.authStage = "unknown";
+      state.authMessage = String(responseBody?.message || text || `HTTP ${response.status}`);
+    }
   }
 
   return result;
 }
 
 async function requestPhoneVerification() {
-  // 정상 세션이 살아 있으면 브라우저와 동일하게 현재 세션으로 먼저 요청한다.
-  // 세션이 만료된 경우에만 CENTER_SESSION을 제거하고 한 번 더 요청한다.
-  // 이렇게 해야 정상 세션에서 /phone-verification을 불필요하게 망가뜨리지 않는다.
-  let result = await callBaeminPost(
+  // 1차 비즈회원 세션이 없으면 배민은 인증번호 발송 자체를 허용하지 않는다.
+  // 이 경우 2차 인증을 억지로 시도하지 않고 1차 로그인 필요 상태를 명확히 노출한다.
+  const result = await callBaeminPost(
     "/phone-verification",
     undefined
   );
 
-  if (!result.ok && (result.status === 401 || result.status === 403)) {
-    cookieJar.delete("CENTER_SESSION");
-    refreshCookieNames();
-    state.authRequired = true;
-
-    result = await callBaeminPost(
-      "/phone-verification",
-      undefined
-    );
-  }
-
   if (!result.ok) {
     const detail = result.body?.message || result.text || `HTTP ${result.status}`;
     const error = httpError(`인증번호 발송 실패: ${detail}`, result);
+    error.authStage = state.authStage;
     error.upstream = result;
     throw error;
   }
 
   state.authRequired = true;
+  state.authStage = "secondary";
+  state.authMessage = "2차 인증번호가 발송되었습니다.";
   return result;
 }
 
@@ -505,6 +521,8 @@ async function submitPhoneVerification(verificationCode) {
   // /login 응답의 Set-Cookie가 mergeSetCookies()를 통해
   // cookieJar에 반영된 뒤에만 인증 성공 처리
   state.authRequired = false;
+  state.authStage = "authenticated";
+  state.authMessage = "";
 
   return result;
 }
@@ -548,9 +566,26 @@ async function callBaemin(path) {
   if (response.ok) {
     state.counters.baeminSuccess++;
     state.authRequired = false;
+    state.authStage = "authenticated";
+    state.authMessage = "";
   } else if (response.status === 401 || response.status === 403) {
     state.counters.authFailures++;
     state.authRequired = true;
+
+    const raw = JSON.stringify(body || {}) + " " + String(text || "");
+    const primary = /비즈회원\s*로그인이\s*필요|business\s*member|business.*login/i.test(raw);
+    const secondary = /TWO_FACTOR_REQUIRED|two.?factor|2차|인증번호/i.test(raw);
+
+    if (primary) {
+      state.authStage = "primary";
+      state.authMessage = "비즈회원 로그인이 필요합니다.";
+    } else if (secondary) {
+      state.authStage = "secondary";
+      state.authMessage = "2차 인증이 필요합니다.";
+    } else {
+      state.authStage = "unknown";
+      state.authMessage = String(body?.message || text || `HTTP ${response.status}`);
+    }
   }
 
   return result;

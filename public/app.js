@@ -95,10 +95,17 @@ async function api(url, options = {}) {
 
   if (!res.ok) {
 
-    throw new Error(
+    const error = new Error(
       json.message ||
       `HTTP ${res.status}`
     );
+
+    if (json && typeof json === "object") {
+      Object.assign(error, json);
+    }
+
+    error.status = res.status;
+    throw error;
 
   }
 
@@ -2362,6 +2369,23 @@ async function openBaeminAuthModal() {
   try {
     const result = await api("/api/master/baemin-auth/status");
     startBaeminAuthCooldown(result?.data?.cooldownRemainingMs || 0);
+    const stage = result?.data?.authStage || "unknown";
+    const guide = $("baeminAuthGuide");
+    const send = $("baeminAuthSendCode");
+    if (stage === "primary") {
+      if (guide) guide.textContent = "현재 배민 1차 비즈회원 로그인이 필요합니다. 2차 인증번호는 아직 발송할 수 없습니다.";
+      if (send) send.disabled = true;
+      setBaeminAuthMessage(result?.data?.authMessage || "비즈회원 로그인이 필요합니다.", "error");
+    } else if (stage === "secondary") {
+      if (guide) guide.textContent = "1차 로그인은 유지되고 있습니다. 인증번호를 받은 뒤 6자리 숫자를 입력해 주세요.";
+      renderBaeminAuthCooldown();
+    } else if (stage === "authenticated") {
+      if (guide) guide.textContent = "현재 배민 인증이 정상 상태입니다. 세션 만료 시 이곳에서 2차 인증을 진행할 수 있습니다.";
+      renderBaeminAuthCooldown();
+    } else {
+      if (guide) guide.textContent = "배민 인증 상태를 확인한 뒤 필요한 인증을 진행해 주세요.";
+      renderBaeminAuthCooldown();
+    }
   } catch (e) {
     setBaeminAuthMessage(e.message || "재인증 상태를 확인하지 못했습니다.", "error");
   }
@@ -2388,6 +2412,10 @@ async function sendBaeminAuthCode() {
     setTimeout(() => $("baeminAuthCode")?.focus(), 0);
   } catch (e) {
     if (Number(e?.retryAfterMs) > 0) startBaeminAuthCooldown(e.retryAfterMs);
+    const guide = $("baeminAuthGuide");
+    if (e?.authStage === "primary" || /비즈회원\s*로그인이\s*필요/.test(String(e?.message || ""))) {
+      if (guide) guide.textContent = "현재 배민 1차 비즈회원 로그인이 필요합니다. 1차 로그인이 완료되어야 2차 인증번호를 받을 수 있습니다.";
+    }
     setBaeminAuthMessage(e.message || "인증번호 발송에 실패했습니다.", "error");
   } finally {
     baeminAuthBusy = false;

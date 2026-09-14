@@ -2796,6 +2796,8 @@ app.get(
       ok: true,
       data: {
         authRequired: Boolean(status.authRequired),
+        authStage: status.authStage || (status.authRequired ? "unknown" : "authenticated"),
+        authMessage: status.authMessage || "",
         configured: Boolean(status.configured),
         centerKey: status.centerKey,
         lastCenterCheck: status.lastCenterCheck,
@@ -2829,8 +2831,10 @@ app.post(
       return res.json({ ok: true, message: "인증번호를 발송했습니다." });
     } catch (error) {
       console.error("[BAEMIN AUTH SEND FAILED]", error.message);
-      return res.status(502).json({
+      const status = getBaeminDirectStatus();
+      return res.status(409).json({
         ok: false,
+        authStage: status.authStage || error.authStage || "unknown",
         message: String(error?.message || "배민 인증번호 발송에 실패했습니다.").slice(0, 300)
       });
     }
