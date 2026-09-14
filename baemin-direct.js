@@ -190,6 +190,22 @@ function buildCookieHeader() {
     .join("; ");
 }
 
+function updateBaeminSession(cookieHeader) {
+  const cookie = String(cookieHeader || "").trim();
+
+  if (!cookie) {
+    throw new Error("적용할 배민 세션 쿠키가 없습니다.");
+  }
+
+  loadCookieHeader(cookie);
+  state.authRequired = false;
+
+  return {
+    ok: true,
+    cookieNames: [...cookieJar.keys()].sort()
+  };
+}
+
 function refreshCookieNames() {
   state.cookieNames = [...cookieJar.keys()].sort();
 }
@@ -1469,6 +1485,7 @@ module.exports = {
   getBaeminDirectStatus,
   requestPhoneVerification,
   submitPhoneVerification,
+  updateBaeminSession,
   // 자동 테스트용. 앱 코드에서는 사용하지 않는다.
   __test: {
     syncLive,
