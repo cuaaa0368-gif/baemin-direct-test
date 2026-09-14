@@ -190,6 +190,10 @@ function buildCookieHeader() {
     .join("; ");
 }
 
+function getBaeminCookieHeader() {
+  return buildCookieHeader();
+}
+
 function updateBaeminSession(cookieHeader) {
   const cookie = String(cookieHeader || "").trim();
 
@@ -1486,6 +1490,7 @@ module.exports = {
   requestPhoneVerification,
   submitPhoneVerification,
   updateBaeminSession,
+  getBaeminCookieHeader,
   // 자동 테스트용. 앱 코드에서는 사용하지 않는다.
   __test: {
     syncLive,
