@@ -3580,6 +3580,8 @@ async function startBaeminCollectors() {
   startExtraCenterCollectors(sharedCookie || getBaeminCookieHeader());
 }
 
+console.log("[BOOT] reached app.listen, PORT =", PORT);
+
 app.listen(
   PORT,
   () => {
