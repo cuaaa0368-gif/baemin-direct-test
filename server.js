@@ -1521,13 +1521,13 @@ app.post('/api/history-backfill-plan/:centerKey', async (req, res) => {
   try {
     await historyArchiveReady;
     const today = businessDateKeyKst();
-    const targetFrom = addDaysKeyServer(today, -(months * 30 + 9)); // 24개월≈729일, 윤/월길이 차이는 충분히 포함
+    const targetFrom = '2026-01-01'; // 누리온 기록 보관 시작일: 2026년 1월 1일
     const targetTo = addDaysKeyServer(today, -90);
     await pool.query(`
       INSERT INTO nurion_history_backfill_state (center_key, target_from, target_to, next_to)
       VALUES ($1,$2,$3,$3)
       ON CONFLICT (center_key) DO UPDATE SET
-        target_from = LEAST(nurion_history_backfill_state.target_from, EXCLUDED.target_from),
+        target_from = EXCLUDED.target_from,
         target_to = GREATEST(nurion_history_backfill_state.target_to, EXCLUDED.target_to),
         next_to = CASE WHEN nurion_history_backfill_state.completed THEN nurion_history_backfill_state.next_to ELSE nurion_history_backfill_state.next_to END,
         updated_at = NOW()
@@ -1962,6 +1962,7 @@ app.get('/api/my-history-month', auth, async (req, res) => {
   const month = String(req.query.month || '').trim();
   if (!riderUserId) return res.status(404).json({ ok:false, message:'라이더 계정이 연결되어 있지 않습니다.' });
   if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ ok:false, message:'month는 YYYY-MM 형식이어야 합니다.' });
+  if (month < '2026-01') return res.status(400).json({ ok:false, message:'2026년 1월 이전 기록은 조회할 수 없습니다.' });
 
   const [year, mon] = month.split('-').map(Number);
   const fromDate = `${year}-${String(mon).padStart(2,'0')}-01`;

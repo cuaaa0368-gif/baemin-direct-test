@@ -1480,6 +1480,7 @@ function renderRanking(d) {
 ========================================================= */
 
 const DETAIL_DAY_MS = 86400000;
+const DETAIL_MIN_DATE_KEY = "2026-01-01";
 let detailWeekStart = null;
 let detailDailyDate = null;
 let periodStartDate = null;
@@ -1523,7 +1524,9 @@ function detailRows() {
     if ((!Array.isArray(myToday?.hourlyCompleted) || !myToday.hourlyCompleted.length) && existing.hourlyCompleted) merged.hourlyCompleted = existing.hourlyCompleted;
     byDate.set(key, merged);
   }
-  return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  return [...byDate.values()]
+    .filter(row => String(row.date) >= DETAIL_MIN_DATE_KEY)
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 }
 
 function monthKey(date) {
@@ -1563,13 +1566,13 @@ async function ensureHistoryMonth(date, { prefetch = false } = {}) {
 function prefetchAdjacentHistoryMonths(date) {
   const prev = new Date(date.getFullYear(), date.getMonth()-1, 1);
   const next = new Date(date.getFullYear(), date.getMonth()+1, 1);
-  ensureHistoryMonth(prev, { prefetch:true });
+  const minMonth = new Date(2026, 0, 1);
+  if (prev >= minMonth) ensureHistoryMonth(prev, { prefetch:true });
   if (next <= new Date(getBusinessDate().getFullYear(), getBusinessDate().getMonth(), 1)) ensureHistoryMonth(next, { prefetch:true });
 }
 
 function detailArchiveMinDate() {
-  const max = getBusinessDate();
-  return new Date(max.getFullYear(), max.getMonth()-(DETAIL_ARCHIVE_MONTHS-1), 1);
+  return new Date(2026, 0, 1);
 }
 
 async function ensureHistoryRange(start, end) {
@@ -1711,7 +1714,8 @@ function initializeDetailDates() {
   if (!detailDailyDate) detailDailyDate = new Date(anchor);
   if (!periodEndDate) periodEndDate = new Date(anchor);
   if (!periodStartDate) periodStartDate = addDays(periodEndDate, -89);
-  if (bounds && periodStartDate < bounds.min) periodStartDate = new Date(bounds.min);
+  const minAllowed = detailArchiveMinDate();
+  if (periodStartDate < minAllowed) periodStartDate = new Date(minAllowed);
   if (!detailHistoryInitialized) {
     calendarDate = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
     detailHistoryInitialized = true;
@@ -3249,7 +3253,8 @@ function setPeriodRange(days) {
   const bounds = historyBounds();
   periodEndDate = bounds?.max ? new Date(bounds.max) : getBusinessDate();
   periodStartDate = addDays(periodEndDate, -(days - 1));
-  if (bounds && periodStartDate < bounds.min) periodStartDate = new Date(bounds.min);
+  const minAllowed = detailArchiveMinDate();
+  if (periodStartDate < minAllowed) periodStartDate = new Date(minAllowed);
   periodVisibleRows = 5;
   renderPeriodDetail();
 }
