@@ -2308,3 +2308,19 @@ nav button.active{
   height:0;
   display:none;
 }
+
+/* =========================================================
+   배민 재인증 - 기존 관리자 팝업 규격 재사용
+========================================================= */
+.live.master-auth-trigger{cursor:pointer;user-select:none;}
+.live.master-auth-trigger:focus-visible{outline:2px solid var(--mint-dark);outline-offset:2px;}
+.baemin-auth-secondary{
+  width:100%;min-height:44px;margin:0 0 10px;border:1px solid var(--mint-dark);
+  border-radius:12px;background:var(--mint-light);color:var(--mint-dark);
+  font-size:14px;font-weight:900;
+}
+.baemin-auth-code{margin-bottom:10px;letter-spacing:4px;}
+.baemin-auth-message{min-height:18px;margin-top:10px;color:#6b7280;font-size:12px;font-weight:700;line-height:1.45;text-align:center;}
+.baemin-auth-message.error{color:#ef4444;}
+.baemin-auth-message.success{color:var(--mint-dark);}
+#baeminAuthModal button:disabled{opacity:.55;cursor:wait;}

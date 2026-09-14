@@ -1414,7 +1414,9 @@ async function startBaeminDirectCollector({ port, ingestKey }) {
   internalBase = `http://127.0.0.1:${Number(port)}`;
   internalIngestKey = String(ingestKey || "");
 
-  state.configured = Boolean(CENTER_ID && INITIAL_COOKIE);
+  const currentCookie = buildCookieHeader() || INITIAL_COOKIE;
+  state.configured = Boolean(CENTER_ID && currentCookie);
+  state.cookieConfigured = Boolean(currentCookie);
   state.enabled = DIRECT_ENABLED && state.configured;
   state.startedAt = new Date().toISOString();
 
@@ -1423,15 +1425,17 @@ async function startBaeminDirectCollector({ port, ingestKey }) {
     return getBaeminDirectStatus();
   }
 
-  if (!CENTER_ID || !INITIAL_COOKIE) {
+  if (!CENTER_ID || !currentCookie) {
     console.log(
       "[BAEMIN DIRECT] 환경변수 미설정 - 기존 Tampermonkey ingest 호환 모드로 실행 " +
-      `(CENTER_ID=${Boolean(CENTER_ID)}, COOKIE=${Boolean(INITIAL_COOKIE)})`
+      `(CENTER_ID=${Boolean(CENTER_ID)}, COOKIE=${Boolean(currentCookie)})`
     );
     return getBaeminDirectStatus();
   }
 
-  loadCookieHeader(INITIAL_COOKIE);
+  // 서버가 DB에서 복원한 세션을 먼저 적용했다면 그것을 우선한다.
+  // 복원된 세션이 없을 때만 Render BAEMIN_COOKIE를 초기값으로 사용한다.
+  if (!buildCookieHeader()) loadCookieHeader(INITIAL_COOKIE);
 
   console.log(
     `[BAEMIN DIRECT] START center=${CENTER_KEY}/${CENTER_NAME} interval=${LIVE_MS}ms`

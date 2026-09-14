@@ -242,6 +242,8 @@ $("logout")?.addEventListener(
 
 
     user = null;
+    updateBaeminAuthTrigger();
+    closeBaeminAuthModal();
     data = null;
     myReject = null;
     centerReject = null;
@@ -2296,6 +2298,155 @@ $("masterCenterSelect")?.addEventListener("change", async (e) => {
 
 
 /* =========================================================
+   배민 재인증 - 마스터/슈퍼관리자 전용
+========================================================= */
+let baeminAuthBusy = false;
+let baeminAuthCooldownTimer = null;
+let baeminAuthCooldownUntil = 0;
+
+function setBaeminAuthMessage(message = "", type = "") {
+  const el = $("baeminAuthMessage");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", type === "error");
+  el.classList.toggle("success", type === "success");
+}
+
+function updateBaeminAuthTrigger() {
+  const el = $("live");
+  if (!el) return;
+  const enabled = isAdminUser();
+  el.classList.toggle("master-auth-trigger", enabled);
+  el.setAttribute("role", enabled ? "button" : "status");
+  if (enabled) {
+    el.setAttribute("tabindex", "0");
+    el.setAttribute("aria-label", "배민 재인증 열기");
+  } else {
+    el.removeAttribute("tabindex");
+    el.removeAttribute("aria-label");
+  }
+}
+
+function renderBaeminAuthCooldown() {
+  const btn = $("baeminAuthSendCode");
+  if (!btn) return;
+  const remain = Math.max(0, baeminAuthCooldownUntil - Date.now());
+  if (remain > 0) {
+    btn.disabled = true;
+    btn.textContent = `인증번호 받기 (${Math.ceil(remain / 1000)}초)`;
+  } else {
+    btn.disabled = baeminAuthBusy;
+    btn.textContent = "인증번호 받기";
+    if (baeminAuthCooldownTimer) {
+      clearInterval(baeminAuthCooldownTimer);
+      baeminAuthCooldownTimer = null;
+    }
+  }
+}
+
+function startBaeminAuthCooldown(ms) {
+  baeminAuthCooldownUntil = Date.now() + Math.max(0, Number(ms) || 0);
+  renderBaeminAuthCooldown();
+  if (!baeminAuthCooldownTimer && baeminAuthCooldownUntil > Date.now()) {
+    baeminAuthCooldownTimer = setInterval(renderBaeminAuthCooldown, 1000);
+  }
+}
+
+async function openBaeminAuthModal() {
+  if (!isAdminUser()) return;
+  $("baeminAuthModal")?.classList.remove("hidden");
+  setBaeminAuthMessage("");
+  const input = $("baeminAuthCode");
+  if (input) input.value = "";
+
+  try {
+    const result = await api("/api/master/baemin-auth/status");
+    startBaeminAuthCooldown(result?.data?.cooldownRemainingMs || 0);
+  } catch (e) {
+    setBaeminAuthMessage(e.message || "재인증 상태를 확인하지 못했습니다.", "error");
+  }
+}
+
+function closeBaeminAuthModal() {
+  $("baeminAuthModal")?.classList.add("hidden");
+  setBaeminAuthMessage("");
+}
+
+async function sendBaeminAuthCode() {
+  if (!isAdminUser() || baeminAuthBusy) return;
+  baeminAuthBusy = true;
+  const btn = $("baeminAuthSendCode");
+  const verifyBtn = $("baeminAuthVerifyCode");
+  if (btn) btn.disabled = true;
+  if (verifyBtn) verifyBtn.disabled = true;
+  setBaeminAuthMessage("인증번호를 요청하고 있습니다.");
+
+  try {
+    const result = await api("/api/master/baemin-auth/send-code", { method: "POST", body: "{}" });
+    setBaeminAuthMessage(result.message || "인증번호를 발송했습니다.", "success");
+    startBaeminAuthCooldown(60_000);
+    setTimeout(() => $("baeminAuthCode")?.focus(), 0);
+  } catch (e) {
+    if (Number(e?.retryAfterMs) > 0) startBaeminAuthCooldown(e.retryAfterMs);
+    setBaeminAuthMessage(e.message || "인증번호 발송에 실패했습니다.", "error");
+  } finally {
+    baeminAuthBusy = false;
+    renderBaeminAuthCooldown();
+    if (verifyBtn) verifyBtn.disabled = false;
+  }
+}
+
+async function verifyBaeminAuthCode() {
+  if (!isAdminUser() || baeminAuthBusy) return;
+  const input = $("baeminAuthCode");
+  const code = String(input?.value || "").replace(/\D/g, "").slice(0, 6);
+  if (input) input.value = code;
+  if (!/^\d{6}$/.test(code)) {
+    setBaeminAuthMessage("인증번호 6자리를 입력해 주세요.", "error");
+    input?.focus();
+    return;
+  }
+
+  baeminAuthBusy = true;
+  const sendBtn = $("baeminAuthSendCode");
+  const verifyBtn = $("baeminAuthVerifyCode");
+  if (sendBtn) sendBtn.disabled = true;
+  if (verifyBtn) { verifyBtn.disabled = true; verifyBtn.textContent = "확인 중"; }
+  setBaeminAuthMessage("새 배민 세션을 확인하고 있습니다.");
+
+  try {
+    const result = await api("/api/master/baemin-auth/verify-code", {
+      method: "POST",
+      body: JSON.stringify({ verificationCode: code })
+    });
+    setBaeminAuthMessage(result.message || "배민 재인증이 완료되었습니다.", "success");
+    setLive(true);
+    setTimeout(closeBaeminAuthModal, 700);
+  } catch (e) {
+    setBaeminAuthMessage(e.message || "인증번호 확인에 실패했습니다.", "error");
+    input?.focus();
+    input?.select();
+  } finally {
+    baeminAuthBusy = false;
+    if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.textContent = "인증 완료"; }
+    renderBaeminAuthCooldown();
+  }
+}
+
+$("live")?.addEventListener("click", () => { if (isAdminUser()) openBaeminAuthModal(); });
+$("live")?.addEventListener("keydown", e => {
+  if (!isAdminUser() || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  openBaeminAuthModal();
+});
+$("baeminAuthModalClose")?.addEventListener("click", closeBaeminAuthModal);
+$("baeminAuthModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeBaeminAuthModal(); });
+$("baeminAuthSendCode")?.addEventListener("click", sendBaeminAuthCode);
+$("baeminAuthVerifyCode")?.addEventListener("click", verifyBaeminAuthCode);
+$("baeminAuthCode")?.addEventListener("input", e => { e.currentTarget.value = String(e.currentTarget.value || "").replace(/\D/g, "").slice(0, 6); });
+$("baeminAuthCode")?.addEventListener("keydown", e => { if (e.key === "Enter") verifyBaeminAuthCode(); });
+
+/* =========================================================
    관리자 운영 설정
 ========================================================= */
 function isAdminUser() {
@@ -2485,6 +2636,7 @@ async function load() {
       me.user;
 
     renderOperationalControls();
+    updateBaeminAuthTrigger();
     await loadMasterCenterSelector();
 
 

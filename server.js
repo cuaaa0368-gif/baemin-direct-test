@@ -7,6 +7,8 @@ const {
   getBaeminDirectStatus,
   requestPhoneVerification,
   submitPhoneVerification,
+  updateBaeminSession,
+  getBaeminCookieHeader,
   __test: baeminDirectTest
 } = require("./baemin-direct");
 const { fork } = require("child_process");
@@ -34,7 +36,7 @@ function parseExtraCenters(raw) {
     });
 }
 
-function startExtraCenterCollectors() {
+function startExtraCenterCollectors(sharedCookie = "") {
   const configuredRaw = String(process.env.BAEMIN_EXTRA_CENTERS || "").trim();
   // 기본 강남B를 유지하면서 Render에 추가한 지사를 병합한다.
   // 같은 key가 있으면 Render 환경변수 쪽 설정을 우선한다.
@@ -50,6 +52,7 @@ function startExtraCenterCollectors() {
         BAEMIN_CENTER_ID: center.centerId,
         BAEMIN_CENTER_KEY: center.key,
         BAEMIN_CENTER_NAME: center.name,
+        BAEMIN_COOKIE: String(sharedCookie || process.env.BAEMIN_COOKIE || ""),
         NURION_INTERNAL_PORT: String(PORT)
       },
       stdio: ["ignore", "inherit", "inherit", "ipc"]
@@ -62,6 +65,7 @@ function startExtraCenterCollectors() {
       pid: child.pid,
       child,
       pendingHistoryFinish: null,
+      lastSessionUpdate: null,
       status: { starting: true }
     };
     extraCenterWorkers.set(center.key, entry);
@@ -69,6 +73,13 @@ function startExtraCenterCollectors() {
     child.on("message", msg => {
       if (msg?.type === "status") entry.status = msg.status;
       if (msg?.type === "error") entry.status = { error: msg.message };
+      if (msg?.type === "baemin-session-update-result") {
+        entry.lastSessionUpdate = {
+          ok: Boolean(msg.ok),
+          message: String(msg.message || ""),
+          at: new Date().toISOString()
+        };
+      }
       if (msg?.type === "history-sync-result" && entry.pendingHistoryFinish) {
         const done = entry.pendingHistoryFinish;
         entry.pendingHistoryFinish = null;
@@ -84,9 +95,24 @@ function startExtraCenterCollectors() {
   }
 }
 
+function broadcastBaeminSessionToWorkers(cookieHeader = getBaeminCookieHeader()) {
+  const cookie = String(cookieHeader || "").trim();
+  if (!cookie) throw new Error("전파할 배민 세션 쿠키가 없습니다.");
+
+  let sent = 0;
+  for (const entry of extraCenterWorkers.values()) {
+    if (!entry.child || !entry.child.connected) continue;
+    entry.child.send({ type: "baemin-session-update", cookie });
+    sent++;
+  }
+
+  console.log(`[BAEMIN SESSION] shared session sent to ${sent} worker(s)`);
+  return sent;
+}
+
 function getExtraCenterStatuses() {
   return Array.from(extraCenterWorkers.values()).map(v => ({
-    key: v.key, name: v.name, centerId: v.centerId, pid: v.pid, status: v.status
+    key: v.key, name: v.name, centerId: v.centerId, pid: v.pid, status: v.status, lastSessionUpdate: v.lastSessionUpdate
   }));
 }
 
@@ -217,6 +243,103 @@ const INGEST_KEY = process.env.INGEST_KEY || "change-me-later";
  * 설정하지 않은 동안은 INGEST_KEY를 사용.
  */
 const LOGIN_SECRET = process.env.LOGIN_SECRET || INGEST_KEY;
+
+// =========================================================
+// 배민 공용 세션 영구 저장
+// - DB에는 평문 쿠키를 저장하지 않고 AES-256-GCM으로 암호화한다.
+// - 별도 환경변수를 늘리지 않기 위해 기존 LOGIN_SECRET에서 암호화 키를 파생한다.
+// =========================================================
+const BAEMIN_SESSION_KEY = crypto
+  .createHash("sha256")
+  .update(`nurion-baemin-session:${LOGIN_SECRET}`)
+  .digest();
+
+const baeminSessionStoreReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS nurion_baemin_session (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    encrypted_cookie TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    auth_tag TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`).catch(err => {
+  console.error("[BAEMIN SESSION DB INIT FAILED]", err.message);
+  throw err;
+});
+
+function encryptBaeminCookie(cookieHeader) {
+  const cookie = String(cookieHeader || "").trim();
+  if (!cookie) throw new Error("저장할 배민 세션 쿠키가 없습니다.");
+
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", BAEMIN_SESSION_KEY, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(cookie, "utf8"),
+    cipher.final()
+  ]);
+
+  return {
+    encryptedCookie: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    authTag: cipher.getAuthTag().toString("base64")
+  };
+}
+
+function decryptBaeminCookie(row) {
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    BAEMIN_SESSION_KEY,
+    Buffer.from(String(row.iv || ""), "base64")
+  );
+  decipher.setAuthTag(Buffer.from(String(row.auth_tag || ""), "base64"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(String(row.encrypted_cookie || ""), "base64")),
+    decipher.final()
+  ]).toString("utf8");
+}
+
+async function saveBaeminSessionToDB(cookieHeader) {
+  const encrypted = encryptBaeminCookie(cookieHeader);
+  await baeminSessionStoreReady;
+  await pool.query(
+    `
+      INSERT INTO nurion_baemin_session (id, encrypted_cookie, iv, auth_tag, updated_at)
+      VALUES (1, $1, $2, $3, NOW())
+      ON CONFLICT (id)
+      DO UPDATE SET
+        encrypted_cookie = EXCLUDED.encrypted_cookie,
+        iv = EXCLUDED.iv,
+        auth_tag = EXCLUDED.auth_tag,
+        updated_at = NOW()
+    `,
+    [encrypted.encryptedCookie, encrypted.iv, encrypted.authTag]
+  );
+  console.log("[BAEMIN SESSION DB] saved");
+}
+
+async function loadBaeminSessionFromDB() {
+  try {
+    await baeminSessionStoreReady;
+    const result = await pool.query(
+      `SELECT encrypted_cookie, iv, auth_tag, updated_at FROM nurion_baemin_session WHERE id = 1`
+    );
+    if (!result.rows.length) return null;
+
+    const cookie = decryptBaeminCookie(result.rows[0]);
+    if (!cookie) return null;
+
+    console.log("[BAEMIN SESSION DB] restored");
+    return { cookie, updatedAt: result.rows[0].updated_at };
+  } catch (err) {
+    console.error("[BAEMIN SESSION DB RESTORE FAILED]", err.message);
+    return null;
+  }
+}
+
+let baeminAuthLastSendAt = 0;
+const BAEMIN_AUTH_SEND_COOLDOWN_MS = 60_000;
+
 
 
 /* =========================================================
@@ -2642,33 +2765,53 @@ app.post(
   }
 );
 
+app.get(
+  "/api/master/baemin-auth/status",
+  auth,
+  (req, res) => {
+    if (req.account.role !== "master" && req.account.role !== "superadmin") {
+      return res.status(403).json({ ok: false, message: "마스터 계정만 사용할 수 있습니다." });
+    }
+
+    const status = getBaeminDirectStatus();
+    return res.json({
+      ok: true,
+      data: {
+        authRequired: Boolean(status.authRequired),
+        configured: Boolean(status.configured),
+        centerKey: status.centerKey,
+        lastCenterCheck: status.lastCenterCheck,
+        cooldownRemainingMs: Math.max(0, BAEMIN_AUTH_SEND_COOLDOWN_MS - (Date.now() - baeminAuthLastSendAt))
+      }
+    });
+  }
+);
+
 app.post(
   "/api/master/baemin-auth/send-code",
   auth,
   async (req, res) => {
     if (req.account.role !== "master" && req.account.role !== "superadmin") {
-      return res.status(403).json({
+      return res.status(403).json({ ok: false, message: "마스터 계정만 사용할 수 있습니다." });
+    }
+
+    const remaining = BAEMIN_AUTH_SEND_COOLDOWN_MS - (Date.now() - baeminAuthLastSendAt);
+    if (remaining > 0) {
+      return res.status(429).json({
         ok: false,
-        message: "마스터 계정만 사용할 수 있습니다."
+        message: `인증번호는 ${Math.ceil(remaining / 1000)}초 후 다시 요청할 수 있습니다.`,
+        retryAfterMs: remaining
       });
     }
 
     try {
       await requestPhoneVerification();
-
+      baeminAuthLastSendAt = Date.now();
       console.log("[BAEMIN AUTH] verification code requested");
-
-      return res.json({
-        ok: true,
-        message: "인증번호를 발송했습니다."
-      });
+      return res.json({ ok: true, message: "인증번호를 발송했습니다." });
     } catch (error) {
       console.error("[BAEMIN AUTH SEND FAILED]", error.message);
-
-      return res.status(502).json({
-        ok: false,
-        message: "배민 인증번호 발송에 실패했습니다."
-      });
+      return res.status(502).json({ ok: false, message: "배민 인증번호 발송에 실패했습니다." });
     }
   }
 );
@@ -2678,37 +2821,32 @@ app.post(
   auth,
   async (req, res) => {
     if (req.account.role !== "master" && req.account.role !== "superadmin") {
-      return res.status(403).json({
-        ok: false,
-        message: "마스터 계정만 사용할 수 있습니다."
-      });
+      return res.status(403).json({ ok: false, message: "마스터 계정만 사용할 수 있습니다." });
     }
 
     const verificationCode = String(req.body?.verificationCode || "").trim();
-
     if (!/^\d{6}$/.test(verificationCode)) {
-      return res.status(400).json({
-        ok: false,
-        message: "인증번호 6자리를 입력해주세요."
-      });
+      return res.status(400).json({ ok: false, message: "인증번호 6자리를 입력해주세요." });
     }
 
     try {
       await submitPhoneVerification(verificationCode);
 
-      console.log("[BAEMIN AUTH] verification completed");
+      // 로그인 응답만 믿지 않고 실제 센터 API가 새 세션으로 정상 응답하는지 확인한다.
+      const verified = await baeminDirectTest.checkCenter();
+      if (!verified) {
+        throw new Error("새 배민 세션 검증에 실패했습니다.");
+      }
 
-      return res.json({
-        ok: true,
-        message: "배민 재인증이 완료되었습니다."
-      });
+      const cookie = getBaeminCookieHeader();
+      await saveBaeminSessionToDB(cookie);
+      const workerCount = broadcastBaeminSessionToWorkers(cookie);
+
+      console.log(`[BAEMIN AUTH] verification completed workers=${workerCount}`);
+      return res.json({ ok: true, message: "배민 재인증이 완료되었습니다." });
     } catch (error) {
       console.error("[BAEMIN AUTH VERIFY FAILED]", error.message);
-
-      return res.status(502).json({
-        ok: false,
-        message: "인증번호 확인에 실패했습니다."
-      });
+      return res.status(502).json({ ok: false, message: "인증번호 확인 또는 새 세션 적용에 실패했습니다." });
     }
   }
 );
@@ -3581,25 +3719,33 @@ app.get(
 );
 
 
+async function startBaeminCollectors() {
+  let sharedCookie = "";
+
+  const restored = await loadBaeminSessionFromDB();
+  if (restored?.cookie) {
+    updateBaeminSession(restored.cookie);
+    sharedCookie = restored.cookie;
+  } else {
+    sharedCookie = String(process.env.BAEMIN_COOKIE || "").trim();
+  }
+
+  await startBaeminDirectCollector({
+    port: PORT,
+    ingestKey: INGEST_KEY
+  });
+
+  // 추가 지사는 메인과 동일한 최신 공용 세션으로 시작한다.
+  startExtraCenterCollectors(sharedCookie || getBaeminCookieHeader());
+}
+
 app.listen(
   PORT,
   () => {
-    console.log(
-      `Rider Control v4: http://localhost:${PORT}`
-    );
+    console.log(`Rider Control v4: http://localhost:${PORT}`);
 
-    startBaeminDirectCollector({
-      port: PORT,
-      ingestKey: INGEST_KEY
-    }).catch(err => {
-      console.error(
-        "[BAEMIN DIRECT START FAILED]",
-        err.message
-      );
+    startBaeminCollectors().catch(err => {
+      console.error("[BAEMIN COLLECTORS START FAILED]", err.message);
     });
-
-    // 추가 지사는 공통 BAEMIN_COOKIE를 공유하고 Center-Id만 분리한다.
-    // 이후에는 BAEMIN_EXTRA_CENTERS 환경변수만 수정하면 지사를 늘릴 수 있다.
-    startExtraCenterCollectors();
   }
 );

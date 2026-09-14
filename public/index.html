@@ -624,6 +624,21 @@
   </div>
 </div>
 
+<!-- 배민 재인증 팝업 - 마스터/슈퍼관리자 전용 -->
+<div id="baeminAuthModal" class="running-modal hidden">
+  <div class="running-popup admin-setting-popup">
+    <div class="running-popup-head">
+      <strong>배민 재인증</strong>
+      <button id="baeminAuthModalClose" type="button">×</button>
+    </div>
+    <p id="baeminAuthGuide" class="admin-setting-guide">인증번호를 받은 뒤 6자리 숫자를 입력해 주세요.</p>
+    <button id="baeminAuthSendCode" class="baemin-auth-secondary" type="button">인증번호 받기</button>
+    <input id="baeminAuthCode" class="set-count-input baemin-auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="인증번호 6자리" aria-label="배민 인증번호 6자리">
+    <button id="baeminAuthVerifyCode" class="admin-setting-confirm" type="button">인증 완료</button>
+    <div id="baeminAuthMessage" class="baemin-auth-message" role="status"></div>
+  </div>
+</div>
+
 <!-- 관리자 거절률 팝업 -->
 <div id="adminRejectModal" class="running-modal hidden">
 
