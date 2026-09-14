@@ -373,6 +373,104 @@ function requestHeaders() {
   };
 }
 
+async function callBaeminPost(path, body) {
+  const startedAt = Date.now();
+  state.counters.baeminRequests++;
+
+  const headers = {
+    ...requestHeaders()
+  };
+
+  const options = {
+    method: "POST",
+    headers,
+    redirect: "manual"
+  };
+
+  // /phone-verification 은 body 없이 호출
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, options);
+  } catch (error) {
+    const e = new Error(`배민 API 연결 실패: ${error.message}`);
+    e.cause = error;
+    throw e;
+  }
+
+  // /login 성공 시 새 CENTER_SESSION도 기존 cookieJar에 자동 반영
+  const changedCookies = mergeSetCookies(response);
+
+  const text = await response.text();
+  let responseBody = null;
+
+  try {
+    responseBody = text ? JSON.parse(text) : null;
+  } catch {}
+
+  const result = {
+    status: response.status,
+    ok: response.ok,
+    durationMs: Date.now() - startedAt,
+    body: responseBody,
+    textLength: text.length,
+    location: response.headers.get("location") || null,
+    changedCookies
+  };
+
+  if (response.ok) {
+    state.counters.baeminSuccess++;
+  } else if (response.status === 401 || response.status === 403) {
+    state.counters.authFailures++;
+    state.authRequired = true;
+  }
+
+  return result;
+}
+
+async function requestPhoneVerification() {
+  const result = await callBaeminPost(
+    "/phone-verification",
+    undefined
+  );
+
+  if (!result.ok) {
+    throw httpError("인증번호 발송 실패", result);
+  }
+
+  return result;
+}
+
+async function submitPhoneVerification(verificationCode) {
+  const code = String(verificationCode || "").trim();
+
+  if (!/^\d{6}$/.test(code)) {
+    throw new Error("인증번호는 6자리 숫자여야 합니다.");
+  }
+
+  const result = await callBaeminPost(
+    "/login",
+    {
+      verificationCode: code
+    }
+  );
+
+  if (!result.ok) {
+    throw httpError("문자인증 로그인 실패", result);
+  }
+
+  // /login 응답의 Set-Cookie가 mergeSetCookies()를 통해
+  // cookieJar에 반영된 뒤에만 인증 성공 처리
+  state.authRequired = false;
+
+  return result;
+}
+
 async function callBaemin(path) {
   const startedAt = Date.now();
   state.counters.baeminRequests++;
@@ -1369,6 +1467,8 @@ function getBaeminDirectStatus() {
 module.exports = {
   startBaeminDirectCollector,
   getBaeminDirectStatus,
+  requestPhoneVerification,
+  submitPhoneVerification,
   // 자동 테스트용. 앱 코드에서는 사용하지 않는다.
   __test: {
     syncLive,
