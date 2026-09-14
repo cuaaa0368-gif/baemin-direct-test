@@ -454,22 +454,33 @@ async function callBaeminPost(path, body) {
 }
 
 async function requestPhoneVerification() {
-  // 완전히 만료된 CENTER_SESSION을 붙여 보내면 배민이 /phone-verification 자체를
-  // 401로 거절한다. 브라우저의 정상 2차 인증 흐름처럼 인증 시작 시에는
-  // 기존 CENTER_SESSION만 제거하고 SMS 인증을 새로 시작한다.
-  cookieJar.delete("CENTER_SESSION");
-  refreshCookieNames();
-  state.authRequired = true;
-
-  const result = await callBaeminPost(
+  // 정상 세션이 살아 있으면 브라우저와 동일하게 현재 세션으로 먼저 요청한다.
+  // 세션이 만료된 경우에만 CENTER_SESSION을 제거하고 한 번 더 요청한다.
+  // 이렇게 해야 정상 세션에서 /phone-verification을 불필요하게 망가뜨리지 않는다.
+  let result = await callBaeminPost(
     "/phone-verification",
     undefined
   );
 
-  if (!result.ok) {
-    throw httpError("인증번호 발송 실패", result);
+  if (!result.ok && (result.status === 401 || result.status === 403)) {
+    cookieJar.delete("CENTER_SESSION");
+    refreshCookieNames();
+    state.authRequired = true;
+
+    result = await callBaeminPost(
+      "/phone-verification",
+      undefined
+    );
   }
 
+  if (!result.ok) {
+    const detail = result.body?.message || result.text || `HTTP ${result.status}`;
+    const error = httpError(`인증번호 발송 실패: ${detail}`, result);
+    error.upstream = result;
+    throw error;
+  }
+
+  state.authRequired = true;
   return result;
 }
 

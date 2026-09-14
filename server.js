@@ -2829,7 +2829,10 @@ app.post(
       return res.json({ ok: true, message: "인증번호를 발송했습니다." });
     } catch (error) {
       console.error("[BAEMIN AUTH SEND FAILED]", error.message);
-      return res.status(502).json({ ok: false, message: "배민 인증번호 발송에 실패했습니다." });
+      return res.status(502).json({
+        ok: false,
+        message: String(error?.message || "배민 인증번호 발송에 실패했습니다.").slice(0, 300)
+      });
     }
   }
 );
