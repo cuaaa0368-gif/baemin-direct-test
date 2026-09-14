@@ -1480,7 +1480,7 @@ function renderRanking(d) {
 ========================================================= */
 
 const DETAIL_DAY_MS = 86400000;
-const DETAIL_MIN_DATE_KEY = "2026-01-01";
+const DETAIL_MIN_DATE_KEY = "2025-07-01";
 let detailWeekStart = null;
 let detailDailyDate = null;
 let periodStartDate = null;
@@ -1566,13 +1566,13 @@ async function ensureHistoryMonth(date, { prefetch = false } = {}) {
 function prefetchAdjacentHistoryMonths(date) {
   const prev = new Date(date.getFullYear(), date.getMonth()-1, 1);
   const next = new Date(date.getFullYear(), date.getMonth()+1, 1);
-  const minMonth = new Date(2026, 0, 1);
+  const minMonth = new Date(2025, 6, 1);
   if (prev >= minMonth) ensureHistoryMonth(prev, { prefetch:true });
   if (next <= new Date(getBusinessDate().getFullYear(), getBusinessDate().getMonth(), 1)) ensureHistoryMonth(next, { prefetch:true });
 }
 
 function detailArchiveMinDate() {
-  return new Date(2026, 0, 1);
+  return new Date(2025, 6, 1);
 }
 
 async function ensureHistoryRange(start, end) {
@@ -3132,7 +3132,7 @@ function renderMonthlyCalendar() {
 
   const [kind,msg]=historyStatusMessage("monthly"); setDetailState("monthlyDataState",kind,msg);
   const maxMonth=new Date(getBusinessDate().getFullYear(),getBusinessDate().getMonth(),1);
-  const minMonth=new Date(maxMonth.getFullYear(),maxMonth.getMonth()-(DETAIL_ARCHIVE_MONTHS-1),1);
+  const minMonth=new Date(2025,6,1);
   $("calendarPrev").disabled=new Date(year,month-1,1)<minMonth; $("calendarNext").disabled=new Date(year,month+1,1)>maxMonth;
 
   // 화면은 즉시 그리고 DB 월 데이터는 비동기로 채운다. 인접 월도 선조회해 스와이프 체감을 유지한다.
