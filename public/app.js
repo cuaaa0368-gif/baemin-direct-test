@@ -2546,17 +2546,7 @@ async function refreshOperationalState() {
 
 function renderCalendarStatusTitle() {
   const el = $("statusTitle");
-  if (!el) return;
-
-  const parts = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short"
-  }).formatToParts(new Date());
-
-  const get = (type) => parts.find((part) => part.type === type)?.value || "";
-  el.textContent = `${get("month")}/${get("day")}(${get("weekday")}) 현황`;
+  if (el) el.textContent = "실시간 현황";
 }
 
 /* =========================================================
@@ -3238,6 +3228,21 @@ function renderDailyDetail() {
   }
   const p=rowParts(row);
   setText("dailyDateTitle",`${formatKoreanDate(detailDailyDate)} (${["일","월","화","수","목","금","토"][detailDailyDate.getDay()]})`); setText("dailyTotal",row?`${p.total.toLocaleString()}건`:"-");
+  const dailyCompareEl = $("dailyCompare");
+  if (dailyCompareEl) {
+    const prevRow = detailRows().find(r => String(r?.date || "") === dateKey(addDays(detailDailyDate,-1)));
+    const prevTotal = prevRow ? rowParts(prevRow).total : 0;
+    if (row && prevRow && prevTotal > 0) {
+      const diff = p.total - prevTotal;
+      dailyCompareEl.textContent = `${diff>0?"▲":diff<0?"▼":"•"} ${Math.abs(diff/prevTotal*100).toFixed(1)}% (전일 대비)`;
+      dailyCompareEl.classList.toggle("up", diff > 0);
+      dailyCompareEl.classList.toggle("down", diff < 0);
+      dailyCompareEl.classList.toggle("same", diff === 0);
+    } else {
+      dailyCompareEl.textContent = "비교 데이터 없음";
+      dailyCompareEl.classList.remove("up","down","same");
+    }
+  }
   setText("dailyFood",row?`${p.food.toLocaleString()}건`:"-"); setText("dailyBmart",row?`${p.bmart.toLocaleString()}건`:"-"); setText("dailyStore",row?`${p.store.toLocaleString()}건`:"-"); setText("dailyOut",row?`${p.out.toLocaleString()}건`:"-");
   setText("dailyFoodRate",row?rateText(p.food,p.total):"-"); setText("dailyBmartRate",row?rateText(p.bmart,p.total):"-"); setText("dailyStoreRate",row?rateText(p.store,p.total):"-"); setText("dailyOutRate",row?rateText(p.out,p.total):"-");
   renderHourly(row,key); renderPeaks(row,key);
@@ -3342,22 +3347,15 @@ $("applyDailyDate")?.addEventListener("click",async()=>{
 $("calendarPrev")?.addEventListener("click",()=>{ calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()-1,1); renderMonthlyCalendar(); });
 $("calendarNext")?.addEventListener("click",()=>{ calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()+1,1); renderMonthlyCalendar(); });
 
-document.querySelectorAll("[data-period-days]").forEach(btn=>btn.addEventListener("click",()=>{
-  document.querySelectorAll("[data-period-days]").forEach(b=>b.classList.toggle("active",b===btn));
-  const value=btn.dataset.periodDays;
-  if(value==="custom") {
-    $("customPeriodPicker")?.classList.remove("hidden");
-    const bounds=historyBounds();
-    if(bounds){
-      $("periodStartDate").min=dateKey(detailArchiveMinDate()); $("periodStartDate").max=dateKey(getBusinessDate());
-      $("periodEndDate").min=dateKey(detailArchiveMinDate()); $("periodEndDate").max=dateKey(getBusinessDate());
-      $("periodStartDate").value=dateKey(periodStartDate); $("periodEndDate").value=dateKey(periodEndDate);
-    }
-    return;
+$("periodDateSearch")?.addEventListener("click",()=>{
+  const bounds=historyBounds();
+  if(bounds){
+    $("periodStartDate").min=dateKey(detailArchiveMinDate()); $("periodStartDate").max=dateKey(getBusinessDate());
+    $("periodEndDate").min=dateKey(detailArchiveMinDate()); $("periodEndDate").max=dateKey(getBusinessDate());
+    $("periodStartDate").value=dateKey(periodStartDate); $("periodEndDate").value=dateKey(periodEndDate);
   }
-  $("customPeriodPicker")?.classList.add("hidden");
-  setPeriodRange(Number(value));
-}));
+  $("customPeriodPicker")?.classList.remove("hidden");
+});
 
 $("applyCustomPeriod")?.addEventListener("click",async()=>{
   const start=parseLocalDate($("periodStartDate")?.value), end=parseLocalDate($("periodEndDate")?.value);

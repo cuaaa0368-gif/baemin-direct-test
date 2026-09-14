@@ -309,22 +309,16 @@
            현황
       ==================================================== -->
 
-      <div class="section-title status-section-title">
+      <div class="card status-card">
 
-        <h2 id="statusTitle">
-          현황
-        </h2>
-
-        <div id="adminOperationControls" class="admin-operation-controls hidden">
-          <select id="masterCenterSelect" class="admin-operation-btn master-center-select hidden" aria-label="지사 선택"></select>
-          <button id="dayBasisBtn" class="admin-operation-btn" type="button">요일 기준</button>
-          <button id="setCountBtn" class="admin-operation-btn" type="button">세트수 10</button>
+        <div class="status-card-head">
+          <h2 id="statusTitle">실시간 현황</h2>
+          <div id="adminOperationControls" class="admin-operation-controls hidden">
+            <select id="masterCenterSelect" class="admin-operation-btn master-center-select hidden" aria-label="지사 선택"></select>
+            <button id="dayBasisBtn" class="admin-operation-btn" type="button">요일 기준</button>
+            <button id="setCountBtn" class="admin-operation-btn" type="button">세트수 10</button>
+          </div>
         </div>
-
-      </div>
-
-
-      <div class="card">
 
         <div id="peaks">
 
@@ -474,235 +468,8 @@
 
 
 
-      <!-- ===================================================
-           QUICK
-      ==================================================== -->
-
-      <div class="quick-grid">
-
-
-        <button
-          class="quick-card"
-          data-page="detail"
-        >
-
-          <div class="quick-top">
-
-            <span>
-              상세정보
-            </span>
-
-            <b>
-              ›
-            </b>
-
-          </div>
-
-
-          <div class="quick-icon">
-            ◷
-          </div>
-
-
-          <strong>
-            나의 주간 배달 실적
-          </strong>
-
-
-          <small>
-            일별 배달 건수 확인
-          </small>
-
-        </button>
-
-
-
-        <button
-          class="quick-card"
-          data-page="ranking"
-        >
-
-          <div class="quick-top">
-
-            <span>
-              랭킹
-            </span>
-
-            <b>
-              ›
-            </b>
-
-          </div>
-
-
-          <div class="quick-icon">
-            ♛
-          </div>
-
-
-          <strong>
-            주간 배달 건수 TOP 5
-          </strong>
-
-
-          <small>
-            지사 라이더 랭킹 확인
-          </small>
-
-        </button>
-
-
-      </div>
-
-
     </section>
 
-<!-- 운행중 기사 팝업 -->
-<div id="runningModal" class="running-modal hidden">
-
-  <div class="running-popup">
-
-    <div class="running-popup-head">
-      <strong>운행중 기사님</strong>
-      <button id="runningModalClose" type="button">×</button>
-    </div>
-
-    <div id="runningRiderList" class="running-rider-list">
-    </div>
-
-  </div>
-
-</div>
-
-<!-- 나의 주간 거절 팝업 -->
-<div id="myRejectModal" class="running-modal hidden">
-
-  <div class="running-popup">
-
-    <div class="running-popup-head">
-      <strong>나의 주간 거절 현황</strong>
-      <small class="my-reject-notice">
-  비마트, 배민스토어, 시간외를 제외한 푸드건 합계입니다.
-</small>
-      <button id="myRejectModalClose" type="button">×</button>
-    </div>
-
-    <div id="myRejectDetail" class="my-complete-detail">
-    </div>
-
-  </div>
-
-</div>
-    
-<!-- 관리자 요일 기준 팝업 -->
-<div id="dayBasisModal" class="running-modal hidden">
-  <div class="running-popup admin-setting-popup">
-    <div class="running-popup-head">
-      <strong>요일 기준</strong>
-      <button id="dayBasisModalClose" type="button">×</button>
-    </div>
-    <p class="admin-setting-guide">오늘 적용할 물량 기준을 선택해 주세요.</p>
-    <div class="day-basis-options">
-      <button type="button" data-day-basis="weekday">평일</button>
-      <button type="button" data-day-basis="saturday">토요일</button>
-      <button type="button" data-day-basis="sunday">일요일</button>
-    </div>
-    <button id="dayBasisConfirm" class="admin-setting-confirm" type="button">확인</button>
-  </div>
-</div>
-
-<!-- 관리자 세트수 조정 팝업 -->
-<div id="setCountModal" class="running-modal hidden">
-  <div class="running-popup admin-setting-popup">
-    <div class="running-popup-head">
-      <strong>세트수 조정</strong>
-      <button id="setCountModalClose" type="button">×</button>
-    </div>
-    <p class="admin-setting-guide">설정할 세트수를 입력해 주세요.</p>
-    <input id="setCountInput" class="set-count-input" type="number" min="0.01" max="100" step="0.01" inputmode="decimal">
-    <button id="setCountConfirm" class="admin-setting-confirm" type="button">확인</button>
-  </div>
-</div>
-
-<!-- 배민 재인증 팝업 - 마스터/슈퍼관리자 전용 -->
-<div id="baeminAuthModal" class="running-modal hidden">
-  <div class="running-popup admin-setting-popup">
-    <div class="running-popup-head">
-      <strong>배민 재인증</strong>
-      <button id="baeminAuthModalClose" type="button">×</button>
-    </div>
-    <p id="baeminAuthGuide" class="admin-setting-guide">인증번호를 받은 뒤 6자리 숫자를 입력해 주세요.</p>
-    <button id="baeminAuthSendCode" class="baemin-auth-secondary" type="button">인증번호 받기</button>
-    <input id="baeminAuthCode" class="set-count-input baemin-auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="인증번호 6자리" aria-label="배민 인증번호 6자리">
-    <button id="baeminAuthVerifyCode" class="admin-setting-confirm" type="button">인증 완료</button>
-    <div id="baeminAuthMessage" class="baemin-auth-message" role="status"></div>
-  </div>
-</div>
-
-<!-- 관리자 거절률 팝업 -->
-<div id="adminRejectModal" class="running-modal hidden">
-
-  <div class="running-popup">
-
-    <div class="running-popup-head">
-      <strong>거절률 20% 초과 기사님</strong>
-      <button id="adminRejectModalClose" type="button">×</button>
-    </div>
-
-    <div id="adminRejectRiderList" class="admin-reject-rider-list">
-    </div>
-
-  </div>
-
-</div>
-    
-<!-- 나의 완료 팝업 -->
-<div id="myCompleteModal" class="running-modal hidden">
-
-  <div class="running-popup">
-
-    <div class="running-popup-head">
-      <strong>나의 완료</strong>
-      <button id="myCompleteModalClose" type="button">×</button>
-    </div>
-
-    <div id="myCompleteDetail" class="my-complete-detail">
-
-      <div>
-        <span>푸드</span>
-        <strong id="myCompleteFood">0건</strong>
-      </div>
-
-      <div>
-        <span>B마트</span>
-        <strong id="myCompleteBmart">0건</strong>
-      </div>
-
-      <div>
-        <span>배민스토어</span>
-        <strong id="myCompleteStore">0건</strong>
-      </div>
-
-      <div>
-        <span>시간외</span>
-        <strong id="myCompleteOut">0건</strong>
-     </div>
-      
-
-      <div class="my-complete-total">
-        <span>총 완료</span>
-        <strong id="myCompleteTotal">0건</strong>
-      </div>
-
-    </div>
-          <div id="myCompleteEmpty" class="hidden">
-  운행기록이 없습니다.
-</div>
-
-  </div>
-
-</div>
-    
     <!-- =====================================================
          상세정보
     ====================================================== -->
@@ -729,17 +496,13 @@
           <button id="weeklyNext" type="button" aria-label="다음 주">›</button>
         </div>
 
-        <section class="detail-summary-card">
-          <div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div>
-          <div class="detail-total-panel"><span>주간 합계</span><div><strong id="weeklyTotal">0건</strong><small id="weeklyCompare">-</small></div></div>
-        </section>
-
-        <div class="detail-stat-grid weekly-stats">
+        <section class="detail-unified-summary weekly-unified-summary">
+          <div class="detail-summary-total"><span>주간합계</span><strong id="weeklyTotal">0건</strong><small id="weeklyCompare">-</small></div>
           <div><span>일평균</span><strong id="weeklyAverage">-</strong></div>
+          <div><span>지난주</span><strong id="previousWeekTotal">-</strong></div>
           <div><span>최대</span><strong id="weeklyMax">-</strong></div>
           <div><span>최소</span><strong id="weeklyMin">-</strong></div>
-          <div><span>지난주</span><strong id="previousWeekTotal">-</strong></div>
-        </div>
+        </section>
 
         <article class="detail-card chart-card"><h3>일별 배달 건수</h3><div id="weeklyBarChart" class="detail-bar-chart"></div></article>
 
@@ -772,19 +535,16 @@
 
       <div id="dailyDetailView" class="detail-view hidden">
         <div id="dailyDataState" class="detail-data-state hidden" role="status"></div>
-        <div class="detail-date-nav"><button id="dailyPrev" type="button" aria-label="이전 날짜">‹</button><strong id="dailyDateTitle">-</strong><button id="dailyNext" type="button" aria-label="다음 날짜">›</button></div>
-        <div class="daily-jump-row"><button id="dailyToday" type="button">오늘</button><button id="dailyDateSearch" class="daily-date-search" type="button" aria-label="날짜 선택" title="날짜 선택"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg></button></div>
+        <div class="detail-date-nav"><button id="dailyPrev" type="button" aria-label="이전 날짜">‹</button><div class="detail-date-center"><strong id="dailyDateTitle">-</strong><button id="dailyDateSearch" class="date-inline-search" type="button" aria-label="날짜 선택" title="날짜 선택"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg></button></div><button id="dailyNext" type="button" aria-label="다음 날짜">›</button></div>
         <div id="dailyDatePicker" class="detail-modal custom-period-modal hidden" role="dialog" aria-modal="true" aria-labelledby="dailyDatePickerTitle"><div class="custom-period-picker daily-single-picker"><div class="custom-period-head"><strong id="dailyDatePickerTitle">날짜 선택</strong><button id="dailyDatePickerClose" type="button" aria-label="닫기">×</button></div><div class="custom-period-fields single"><label><span>조회일</span><input id="dailyDateInput" type="date"></label></div><button id="applyDailyDate" type="button">조회</button></div></div>
-        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div><div class="detail-total-panel simple"><span>일일 합계</span><div><strong id="dailyTotal">0건</strong></div></div></section>
-        <div class="detail-stat-grid daily-types"><div><span>음식</span><strong id="dailyFood">-</strong><small id="dailyFoodRate">-</small></div><div><span>B마트</span><strong id="dailyBmart">-</strong><small id="dailyBmartRate">-</small></div><div><span>스토어</span><strong id="dailyStore">-</strong><small id="dailyStoreRate">-</small></div><div><span>시간외</span><strong id="dailyOut">-</strong><small id="dailyOutRate">-</small></div></div>
+        <section class="detail-unified-summary daily-unified-summary"><div class="detail-summary-total"><span>일일합계</span><strong id="dailyTotal">0건</strong><small id="dailyCompare">-</small></div><div><span>음식</span><strong id="dailyFood">-</strong><small id="dailyFoodRate">-</small></div><div><span>B마트</span><strong id="dailyBmart">-</strong><small id="dailyBmartRate">-</small></div><div><span>스토어</span><strong id="dailyStore">-</strong><small id="dailyStoreRate">-</small></div><div><span>시간외</span><strong id="dailyOut">-</strong><small id="dailyOutRate">-</small></div></section>
         <article class="detail-card chart-card"><h3>시간대별 배달 건수</h3><div id="dailyHourlyChart" class="daily-hourly-chart"></div><p id="dailyHourlyNote" class="detail-data-note hidden"></p></article>
-        <article class="detail-card"><h3>피크타임 배달 건수</h3><div class="peak-detail-grid"><div><span>아침점심피크</span><strong id="dailyPeakMorning">-</strong></div><div><span>오후논피크</span><strong id="dailyPeakAfternoon">-</strong></div><div class="active"><span>저녁피크</span><strong id="dailyPeakEvening">-</strong></div><div><span>야간논피크</span><strong id="dailyPeakMidnight">-</strong></div></div><p id="dailyPeakNote" class="detail-data-note hidden"></p></article>
+        <article class="detail-card"><h3>피크타임 배달 건수</h3><div class="peak-detail-grid"><div><span>아침점심피크</span><strong id="dailyPeakMorning">-</strong></div><div><span>오후논피크</span><strong id="dailyPeakAfternoon">-</strong></div><div><span>저녁피크</span><strong id="dailyPeakEvening">-</strong></div><div><span>야간논피크</span><strong id="dailyPeakMidnight">-</strong></div></div><p id="dailyPeakNote" class="detail-data-note hidden"></p></article>
       </div>
 
       <div id="periodDetailView" class="detail-view hidden">
         <div id="periodDataState" class="detail-data-state hidden" role="status"></div>
-        <div class="detail-date-nav period-date-nav"><button id="periodPrev" type="button" aria-label="이전 기간">‹</button><strong id="periodRangeTitle">-</strong><button id="periodNext" type="button" aria-label="다음 기간">›</button></div>
-        <div class="period-quick-tabs"><button type="button" data-period-days="7">최근 7일</button><button type="button" data-period-days="30">최근 30일</button><button type="button" class="active" data-period-days="90">최근 90일</button><button type="button" class="period-custom-trigger" data-period-days="custom" aria-label="직접선택" title="직접선택"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg></button></div>
+        <div class="detail-date-nav period-date-nav"><button id="periodPrev" type="button" aria-label="이전 기간">‹</button><div class="detail-date-center"><strong id="periodRangeTitle">-</strong><button id="periodDateSearch" class="date-inline-search" type="button" aria-label="기간 직접선택" title="기간 직접선택"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg></button></div><button id="periodNext" type="button" aria-label="다음 기간">›</button></div>
         <div id="customPeriodPicker" class="detail-modal custom-period-modal hidden" role="dialog" aria-modal="true" aria-labelledby="customPeriodTitle">
           <div class="custom-period-picker">
             <div class="custom-period-head"><strong id="customPeriodTitle">기간 직접선택</strong><button id="customPeriodClose" type="button" aria-label="닫기">×</button></div>
@@ -792,8 +552,7 @@
             <button id="applyCustomPeriod" type="button">조회</button>
           </div>
         </div>
-        <section class="detail-summary-card"><div class="detail-rider-block"><span class="detail-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 20c.7-4.2 3.2-6.3 7.5-6.3s6.8 2.1 7.5 6.3"></path></svg></span><strong class="detail-rider-name"><span class="rider-name-text"></span><span class="rider-honorific">기사님</span></strong></div><div class="detail-total-panel"><span>기간 합계</span><div><strong id="periodTotal">0건</strong><small id="periodAverage">일평균 -</small></div></div></section>
-        <div class="detail-stat-grid period-types"><div><span>음식</span><strong id="periodFood">-</strong><small id="periodFoodRate">-</small></div><div><span>B마트</span><strong id="periodBmart">-</strong><small id="periodBmartRate">-</small></div><div><span>스토어</span><strong id="periodStore">-</strong><small id="periodStoreRate">-</small></div><div><span>시간외</span><strong id="periodOut">-</strong><small id="periodOutRate">-</small></div></div>
+        <section class="detail-unified-summary period-unified-summary"><div class="detail-summary-total"><span>기간합계</span><strong id="periodTotal">0건</strong><small id="periodAverage">일평균 -</small></div><div><span>음식</span><strong id="periodFood">-</strong><small id="periodFoodRate">-</small></div><div><span>B마트</span><strong id="periodBmart">-</strong><small id="periodBmartRate">-</small></div><div><span>스토어</span><strong id="periodStore">-</strong><small id="periodStoreRate">-</small></div><div><span>시간외</span><strong id="periodOut">-</strong><small id="periodOutRate">-</small></div></section>
         <article class="detail-card chart-card"><h3>월별 배달 건수</h3><div id="periodMonthlyChart" class="period-month-chart"></div></article>
       </div>
     </section>
