@@ -2600,7 +2600,8 @@ function renderMain(d) {
   }
 
 
-  setLive(true);
+  // 마지막 정상 데이터는 그대로 보여주되, 수집기의 인증 상태는 LIVE/WAIT에 반영한다.
+  setLive(d.live !== false);
 
 }
 

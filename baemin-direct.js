@@ -454,6 +454,13 @@ async function callBaeminPost(path, body) {
 }
 
 async function requestPhoneVerification() {
+  // 완전히 만료된 CENTER_SESSION을 붙여 보내면 배민이 /phone-verification 자체를
+  // 401로 거절한다. 브라우저의 정상 2차 인증 흐름처럼 인증 시작 시에는
+  // 기존 CENTER_SESSION만 제거하고 SMS 인증을 새로 시작한다.
+  cookieJar.delete("CENTER_SESSION");
+  refreshCookieNames();
+  state.authRequired = true;
+
   const result = await callBaeminPost(
     "/phone-verification",
     undefined

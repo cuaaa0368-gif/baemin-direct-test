@@ -1365,13 +1365,31 @@ function centerAllowed(a, key) {
    앱으로 공개할 지사 데이터
 ========================================================= */
 
+function getCenterCollectorStatus(centerKey) {
+  const key = String(centerKey || "").trim();
+  const main = getBaeminDirectStatus();
+
+  if (String(main?.centerKey || "") === key) return main || {};
+
+  const worker = extraCenterWorkers.get(key);
+  return worker?.status || {};
+}
+
 function publicPayload(d) {
   const operational = goalsForCenter(d.centerKey);
+  const collectorStatus = getCenterCollectorStatus(d.centerKey);
+  const live = !Boolean(
+    collectorStatus?.authRequired ||
+    collectorStatus?.stopped ||
+    collectorStatus?.error
+  );
+
   return {
     centerKey: d.centerKey,
     centerName: d.centerName,
     receivedAt: d.receivedAt,
     sentAt: d.sentAt,
+    live,
 
     summary: d.summary,
     peaks: d.peaks,
