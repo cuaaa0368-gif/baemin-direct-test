@@ -952,7 +952,6 @@ async function getSeochoChampions(centerKey) {
     AND complete > 0
 )
 ORDER BY stat_date ASC, rider_user_id ASC
-    LIMIT 1
     `,
     [centerKey]
   );
@@ -977,7 +976,6 @@ ORDER BY stat_date ASC, rider_user_id ASC
         AND evening_complete > 0
     )
   ORDER BY stat_date ASC, rider_user_id ASC
-  LIMIT 1
   `,
   [centerKey]
 );
@@ -1004,7 +1002,6 @@ const weeklyResult = await pool.query(
         AND complete > 0
     )
   ORDER BY week_start ASC, rider_user_id ASC
-  LIMIT 1
   `,
   [centerKey]
 );
